@@ -4,6 +4,8 @@ export interface User {
   email: string;
   display_name: string;
   avatar: string | null;
+  avatar_url?: string;
+  avatar_image?: string | null;
 }
 
 export interface MapBoard {

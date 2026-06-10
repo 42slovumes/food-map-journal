@@ -2,6 +2,7 @@ import { MapPin, Sparkles } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { GoogleSignInButton, googleSignInEnabled } from "@/components/GoogleSignInButton";
 import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/components/ui/Toast";
 import { useAuth } from "@/store/auth";
@@ -14,8 +15,17 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  async function handleGoogle(credential: string) {
+    try {
+      await loginWithGoogle(credential);
+      navigate("/");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Google 登入失敗");
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -153,6 +163,17 @@ export default function AuthPage() {
               {mode === "login" ? "登入" : "建立帳號"}
             </button>
           </form>
+
+          {googleSignInEnabled && (
+            <>
+              <div className="my-5 flex items-center gap-3 text-xs text-ink-faint">
+                <span className="h-px flex-1 bg-line" />
+                或
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <GoogleSignInButton onCredential={handleGoogle} />
+            </>
+          )}
 
           <button
             onClick={useDemo}

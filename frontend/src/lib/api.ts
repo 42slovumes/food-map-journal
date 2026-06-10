@@ -89,11 +89,21 @@ export const authApi = {
     await api.post("/auth/register/", payload);
     return authApi.login(payload.email, payload.password);
   },
+  async google(credential: string) {
+    const { data } = await api.post("/auth/google/", { credential });
+    tokenStore.set(data.access, data.refresh);
+    return data.user as User;
+  },
   async me() {
     const { data } = await api.get<User>("/auth/me/");
     return data;
   },
   logout() {
+    // 先請後端把 refresh token 加入黑名單（best-effort），再清除本地
+    const refresh = tokenStore.refresh();
+    if (refresh) {
+      api.post("/auth/logout/", { refresh }).catch(() => {});
+    }
     tokenStore.clear();
   },
 };

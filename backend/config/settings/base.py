@@ -38,6 +38,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
 ]
@@ -142,13 +143,18 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    # 只對標了 throttle_scope 的端點（登入/註冊/Google）限流，擋暴力破解。
+    # 預設用 Django LocMemCache；正式環境多程序建議改用 Redis cache。
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {"auth": "10/min"},
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": False,
+    # 輪替後把舊 refresh token 加入黑名單，避免外洩的舊 token 被無限使用
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # ---- CORS ----

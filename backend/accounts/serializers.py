@@ -30,7 +30,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "email", "display_name", "password"]
 
     def validate_email(self, value):
-        if User.objects.filter(email__iexact=value).exists():
+        # 一律正規化成小寫，避免大小寫造成重複帳號或誤配
+        value = value.lower()
+        if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("此電子郵件已被註冊。")
         return value
 

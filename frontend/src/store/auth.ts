@@ -13,6 +13,7 @@ interface AuthState {
     password: string;
     display_name?: string;
   }) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -42,6 +43,11 @@ export const useAuth = create<AuthState>((set) => ({
 
   async register(payload) {
     const user = await authApi.register(payload);
+    set({ user, status: "authed" });
+  },
+
+  async loginWithGoogle(credential) {
+    const user = await authApi.google(credential);
     set({ user, status: "authed" });
   },
 

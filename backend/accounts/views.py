@@ -5,6 +5,7 @@ from google.oauth2 import id_token as google_id_token
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -22,6 +23,7 @@ class RegisterView(generics.CreateAPIView):
 
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "auth"
 
 
 class LoginView(TokenObtainPairView):
@@ -29,6 +31,7 @@ class LoginView(TokenObtainPairView):
 
     serializer_class = EmailTokenObtainPairSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "auth"
 
 
 class MeView(generics.RetrieveUpdateAPIView):
@@ -62,6 +65,7 @@ class GoogleAuthView(APIView):
     """
 
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "auth"
 
     def post(self, request):
         client_id = settings.GOOGLE_OAUTH_CLIENT_ID
@@ -85,16 +89,19 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not idinfo.get("email"):
-            return Response({"detail": "Google 帳號缺少 email。"}, status=status.HTTP_400_BAD_REQUEST)
-        if idinfo.get("email_verified") is False:
+        # 嚴格驗證必要 claim：email 必須存在且「明確已驗證」(email_verified === True)，
+        # sub 必須存在。缺漏或非 True 一律拒絕，避免 None/非布林值繞過。
+        email = idinfo.get("email")
+        sub = idinfo.get("sub")
+        if not email or not sub:
+            return Response({"detail": "Google 帳號資訊不完整。"}, status=status.HTTP_400_BAD_REQUEST)
+        if idinfo.get("email_verified") is not True:
             return Response(
                 {"detail": "此 Google 帳號的 email 尚未驗證。"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        email = idinfo["email"].lower()
-        sub = idinfo.get("sub", "")
+        email = email.lower()
         name = idinfo.get("name") or email.split("@")[0]
         picture = idinfo.get("picture", "")
 
@@ -132,3 +139,18 @@ class GoogleAuthView(APIView):
                 "created": created,
             }
         )
+
+
+class LogoutView(APIView):
+    """登出：把 refresh token 加入黑名單，立即在伺服器端撤銷。"""
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        token = request.data.get("refresh")
+        if token:
+            try:
+                RefreshToken(token).blacklist()
+            except TokenError:
+                pass  # 已過期 / 無效，視同已登出
+        return Response(status=status.HTTP_205_RESET_CONTENT)

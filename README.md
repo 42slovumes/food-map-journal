@@ -8,7 +8,7 @@
 
 ## ✨ 已完成功能（MVP）
 
-- **帳號系統**：註冊 / 登入 / 登出（JWT），個人資料，路由守衛。
+- **帳號系統**：註冊 / 登入 / 登出（JWT）、**Google 登入（選用）**、個人資料、路由守衛。
 - **自由分類**：自訂名稱、顏色、圖示、描述，排序與計數。
 - **地圖 / 看板**：可建立多張主題地圖並快速切換。
 - **地點紀錄**：名稱、地址、座標、狀態、星等、標籤、備註，照片與進階欄位。
@@ -89,9 +89,19 @@ pnpm dev
 | 變數 | 說明 |
 |------|------|
 | `VITE_GOOGLE_MAPS_API_KEY` | 留空 → 自動用 OpenStreetMap；填入 → 切換成 Google Maps + Places |
+| `GOOGLE_OAUTH_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Google 登入用的同一組 Web Client ID（前後端皆需）；留空則不啟用 Google 登入 |
 | `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api`） |
 | `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SQLite |
 | `DJANGO_ENV` | `development` / `staging` / `production` |
+
+### 啟用 Google 登入（選用）
+
+1. 到 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) 建立 **OAuth 2.0 用戶端 ID → 網頁應用程式**。
+2. 在「已授權的 JavaScript 來源」加入 `http://localhost:5173`（正式環境再加你的網域）。
+3. 把產生的 **Client ID** 同時填入 `.env` 的 `GOOGLE_OAUTH_CLIENT_ID` 與 `VITE_GOOGLE_CLIENT_ID`（必須是同一組）。
+4. 重啟服務 → 登入頁會自動出現「使用 Google 繼續」按鈕。
+
+> 流程：前端用 Google Identity Services 取得 ID token → 後端用 `google-auth` 驗證（簽章、audience、未過期、email 已驗證）→ 依 email 找到或建立使用者 → 換發本站 JWT。沒填 Client ID 時整個功能自動隱藏，不影響 email 登入。
 
 > 本機 8000–8010 常被其他服務佔用，本專案因此預設使用 8080（後端）/ 5173（前端）。
 
@@ -127,6 +137,7 @@ food-map-journal/
 | 方法 | 路徑 | 說明 |
 |------|------|------|
 | POST | `/api/auth/register/` · `/api/auth/login/` · `/api/auth/refresh/` | 註冊 / 登入 / 換 token |
+| POST | `/api/auth/google/` | Google ID token 登入（驗證後換發 JWT） |
 | GET/PATCH | `/api/auth/me/` | 個人資料 |
 | CRUD | `/api/maps/` · `/api/categories/` · `/api/places/` | 地圖 / 分類 / 地點 |
 | GET | `/api/places/?category=&status=&search=&map=` | 篩選 |

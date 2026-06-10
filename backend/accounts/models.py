@@ -23,6 +23,9 @@ class User(AbstractUser):
         return self.display_name or self.email
 
     def save(self, *args, **kwargs):
+        # email 一律正規化成小寫（杜絕大小寫造成的重複/誤配帳號）
+        if self.email:
+            self.email = self.email.lower()
         if not self.display_name:
             self.display_name = self.username or self.email.split("@")[0]
         super().save(*args, **kwargs)
