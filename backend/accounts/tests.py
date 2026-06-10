@@ -104,6 +104,34 @@ def test_register_without_username(client):
 
 
 @pytest.mark.django_db
+def test_login_is_case_insensitive(client):
+    # 帳號以小寫儲存；用混合大小寫 email 仍可登入
+    User.objects.create_user(username="cx", email="case@example.com", password="pw-123456")
+    r = client.post(
+        "/api/v1/auth/login/",
+        {"email": "CASE@Example.com", "password": "pw-123456"},
+        format="json",
+    )
+    assert r.status_code == 200, r.json()
+
+
+@pytest.mark.django_db
+def test_email_not_editable_via_me(client):
+    # email 是身份識別，不可透過 /auth/me/ 修改
+    u = User.objects.create_user(username="me1", email="me1@example.com", password="pw-123456")
+    client.force_authenticate(u)
+    r = client.patch(
+        "/api/v1/auth/me/",
+        {"email": "hacked@example.com", "display_name": "新名"},
+        format="json",
+    )
+    assert r.status_code == 200
+    u.refresh_from_db()
+    assert u.email == "me1@example.com"  # email 未被更動
+    assert u.display_name == "新名"  # 其他欄位仍可改
+
+
+@pytest.mark.django_db
 def test_logout_blacklists_refresh_token(client):
     User.objects.create_user(username="lo", email="lo@example.com", password="pw-123456")
     login = client.post(

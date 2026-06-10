@@ -11,7 +11,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "email", "display_name", "avatar", "avatar_url", "avatar_image"]
-        read_only_fields = ["id", "avatar_url", "avatar_image"]
+        # email 是身份識別（USERNAME_FIELD）→ 不可透過 /auth/me/ 修改
+        read_only_fields = ["id", "email", "avatar_url", "avatar_image"]
 
     def get_avatar_image(self, obj):
         """統一頭像來源：優先上傳檔，否則用第三方頭像連結。"""
@@ -61,6 +62,9 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = User.USERNAME_FIELD
 
     def validate(self, attrs):
+        # email 正規化為小寫，確保大小寫不敏感登入（與註冊/Google 一致）
+        if attrs.get(self.username_field):
+            attrs[self.username_field] = attrs[self.username_field].lower()
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data

@@ -22,3 +22,4 @@ class PlaceAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "category", "status", "rating", "updated_at")
     search_fields = ("name", "address")
     list_filter = ("status", "category")
+    exclude = ("location",)  # 由 lat/lng 自動同步，不在 admin 直接編輯

@@ -35,8 +35,8 @@
 | 層 | 技術 |
 |----|------|
 | 前端 | React + Vite + TypeScript、React Router、Zustand、Tailwind CSS、Framer Motion、地圖抽象層（Google Maps JS API / react-leaflet） |
-| 後端 | Django 5 + Django REST Framework、SimpleJWT、django-filter、**Channels + channels-redis + Daphne（WebSocket 即時同步）**、uv 管理 |
-| 資料庫 | PostgreSQL（Docker）／本機可降級 SQLite |
+| 後端 | Django 5 + Django REST Framework、SimpleJWT、django-filter、**Channels + channels-redis + Daphne（WebSocket 即時同步）**、**GeoDjango（空間查詢）**、uv 管理 |
+| 資料庫 | **PostGIS**（Docker）／本機 **SpatiaLite**；地點 `location` 空間欄位 + GiST 索引，附近搜尋走空間索引 + haversine 精算 |
 | 即時 | WebSocket（Django Channels），Redis 作 channel layer（本機可降級 InMemory） |
 | 基礎設施 | Docker Compose（db / redis / backend / frontend） |
 
@@ -57,10 +57,19 @@ docker compose up --build
 
 停止：`docker compose down`（保留資料）／`docker compose down -v`（連資料一起清除）。
 
-### 方式二：本機開發（不需 Docker，後端走 SQLite）
+### 方式二：本機開發（後端走 SpatiaLite，需空間函式庫）
+
+GeoDjango 需要 GDAL / GEOS / PROJ / SpatiaLite；本機開發請先安裝（macOS）：
 
 ```bash
-cp .env.example .env        # 本機預設不設 POSTGRES_HOST → 自動用 SQLite
+brew install gdal geos proj libspatialite
+```
+
+> Linux 對應 `gdal-bin libgdal-dev libgeos-dev libproj-dev binutils libsqlite3-mod-spatialite`。
+> settings 會自動偵測 Homebrew 路徑；如需手動指定可設 `GDAL_LIBRARY_PATH` / `GEOS_LIBRARY_PATH` / `SPATIALITE_LIBRARY_PATH`。
+
+```bash
+cp .env.example .env        # 本機預設不設 POSTGRES_HOST → 用 SpatiaLite（檔案型空間 DB）
 
 # 後端
 cd backend
@@ -95,7 +104,7 @@ pnpm dev
 | `VITE_GOOGLE_MAPS_API_KEY` | 留空 → 自動用 OpenStreetMap；填入 → 切換成 Google Maps + Places |
 | `GOOGLE_OAUTH_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Google 登入用的同一組 Web Client ID（前後端皆需）；留空則不啟用 Google 登入 |
 | `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api/v1`） |
-| `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SQLite |
+| `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SpatiaLite（檔案型空間 DB） |
 | `CHANNEL_LAYER` | 即時同步 channel layer：`redis`（Docker/正式）或留空＝InMemory（本機單程序） |
 | `DJANGO_ENV` | `development` / `staging` / `production` |
 
@@ -171,4 +180,5 @@ food-map-journal/
 - ~~**第一階段**：穩固可運行 MVP。~~ ✅ 完成
 - ~~**第二階段**：共編協作 + Django Channels + Redis + WebSocket 即時同步、權限管理。~~ ✅ 完成
 - ~~**第三階段**：地圖/清單圖片產出與社群分享、公開分享連結、智慧推薦。~~ ✅ 完成
-- **後續優化**：PostGIS 地理空間查詢（目前以 haversine + bounding box 達成附近搜尋，功能已滿足；PostGIS 為正式環境的效能優化，需換 PostGIS 映像 + GeoDjango，列為選用）、持久化操作紀錄、相似度/順路推薦。
+- ~~**PostGIS 地理空間查詢優化**：地點 `location` 空間欄位 + GiST 索引，附近搜尋以 `dwithin` 走空間索引預篩 + haversine 精算（PostGIS / SpatiaLite）。~~ ✅ 完成
+- **後續優化**：持久化操作紀錄、相似度/順路推薦、PostGIS geography 精準距離排序。

@@ -27,6 +27,9 @@ export default function ManagePage() {
   const [delCat, setDelCat] = useState<Category | null>(null);
   const [delMap, setDelMap] = useState<MapBoard | null>(null);
 
+  const activeMap = maps.find((m) => m.id === activeMapId);
+  const canEditCats = !!activeMap && activeMap.my_role !== "viewer"; // owner/editor 可管理分類
+
   return (
     <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-28 pt-5 md:px-8 md:pb-8">
       <div className="mx-auto max-w-3xl space-y-8">
@@ -60,21 +63,28 @@ export default function ManagePage() {
                     </span>
                   </span>
                 </button>
-                <div className="flex shrink-0 gap-1">
-                  <IconBtn onClick={() => setMapForm({ open: true, initial: m })} label="編輯">
-                    <Pencil size={16} />
-                  </IconBtn>
-                  <IconBtn
-                    onClick={() => {
-                      if (maps.length <= 1) return toast.error("至少保留一張地圖");
-                      setDelMap(m);
-                    }}
-                    label="刪除"
-                    danger
-                  >
-                    <Trash2 size={16} />
-                  </IconBtn>
-                </div>
+                {m.my_role === "owner" ? (
+                  <div className="flex shrink-0 gap-1">
+                    <IconBtn onClick={() => setMapForm({ open: true, initial: m })} label="編輯">
+                      <Pencil size={16} />
+                    </IconBtn>
+                    <IconBtn
+                      onClick={() => {
+                        if (maps.filter((x) => x.my_role === "owner").length <= 1)
+                          return toast.error("至少保留一張自己的地圖");
+                        setDelMap(m);
+                      }}
+                      label="刪除"
+                      danger
+                    >
+                      <Trash2 size={16} />
+                    </IconBtn>
+                  </div>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs text-ink-faint">
+                    {m.my_role === "editor" ? "共編" : "檢視"}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -84,7 +94,7 @@ export default function ManagePage() {
         <section>
           <SectionHeader
             title="目前地圖的分類"
-            onAdd={() => setCatForm({ open: true, initial: null })}
+            onAdd={canEditCats ? () => setCatForm({ open: true, initial: null }) : undefined}
             addLabel="新增分類"
           />
           {categories.length === 0 ? (
@@ -119,14 +129,16 @@ export default function ManagePage() {
                       <p className="truncate text-sm text-ink-faint">{c.description}</p>
                     )}
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <IconBtn onClick={() => setCatForm({ open: true, initial: c })} label="編輯">
-                      <Pencil size={16} />
-                    </IconBtn>
-                    <IconBtn onClick={() => setDelCat(c)} label="刪除" danger>
-                      <Trash2 size={16} />
-                    </IconBtn>
-                  </div>
+                  {canEditCats && (
+                    <div className="flex shrink-0 gap-1">
+                      <IconBtn onClick={() => setCatForm({ open: true, initial: c })} label="編輯">
+                        <Pencil size={16} />
+                      </IconBtn>
+                      <IconBtn onClick={() => setDelCat(c)} label="刪除" danger>
+                        <Trash2 size={16} />
+                      </IconBtn>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -182,16 +194,18 @@ function SectionHeader({
   addLabel,
 }: {
   title: string;
-  onAdd: () => void;
+  onAdd?: () => void;
   addLabel: string;
 }) {
   return (
     <div className="mb-3 flex items-center justify-between">
       <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-      <button onClick={onAdd} className="btn-outline px-3 py-2 text-sm">
-        <Plus size={16} />
-        {addLabel}
-      </button>
+      {onAdd && (
+        <button onClick={onAdd} className="btn-outline px-3 py-2 text-sm">
+          <Plus size={16} />
+          {addLabel}
+        </button>
+      )}
     </div>
   );
 }

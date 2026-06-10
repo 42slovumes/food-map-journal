@@ -211,6 +211,28 @@ def test_share_token_only_visible_to_owner(world):
     assert viewer_view["share_token"] is None  # 非 owner 看不到 token
 
 
+def test_nearby_search_spatial(world):
+    # 空間附近搜尋：用 location__dwithin 預篩 + haversine 精算排序
+    cat = world["cat"]
+    Place.objects.create(
+        category=cat, name="近店", latitude=25.050, longitude=121.550,
+        created_by=world["owner"], updated_by=world["owner"],
+    )
+    Place.objects.create(
+        category=cat, name="遠店", latitude=25.300, longitude=121.800,
+        created_by=world["owner"], updated_by=world["owner"],
+    )
+    r = auth(world["owner"]).get(
+        f"/api/v1/places/?map={world['map'].id}&lat=25.050&lng=121.550&radius=5"
+    )
+    assert r.status_code == 200
+    results = r.json()["results"]
+    names = [p["name"] for p in results]
+    assert "近店" in names and "遠店" not in names  # 遠店在 5km 外
+    assert results[0]["name"] == "近店"
+    assert results[0]["distance_km"] is not None
+
+
 def test_recommendations_groups(world):
     Place.objects.create(
         category=world["cat"], name="高分店", rating=5, status="已去",

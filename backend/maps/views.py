@@ -1,6 +1,7 @@
 import math
 
 from django.contrib.auth import get_user_model
+from django.contrib.gis.geos import Point
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status, viewsets
@@ -150,16 +151,9 @@ class PlaceViewSet(viewsets.ModelViewSet):
         except ValueError:
             raise ValidationError({"radius": "必須是數字。"})
 
-        lat_delta = radius / 111.0
-        lng_delta = radius / (111.0 * max(math.cos(math.radians(lat)), 0.01))
-        qs = qs.filter(
-            latitude__isnull=False,
-            longitude__isnull=False,
-            latitude__gte=lat - lat_delta,
-            latitude__lte=lat + lat_delta,
-            longitude__gte=lng - lng_delta,
-            longitude__lte=lng + lng_delta,
-        )
+        # 空間索引預篩（dwithin 以度為單位）→ 再用 haversine 精算與排序
+        pt = Point(lng, lat, srid=4326)
+        qs = qs.filter(location__isnull=False, location__dwithin=(pt, radius / 111.0))
 
         nearby = []
         for place in qs:
@@ -342,16 +336,10 @@ class RecommendationsView(APIView):
             try:
                 latf, lngf = float(lat), float(lng)
                 radius = 10.0
-                # 先用 bounding box 粗篩，避免把整張地圖的地點全載入記憶體
-                lat_delta = radius / 111.0
-                lng_delta = radius / (111.0 * max(math.cos(math.radians(latf)), 0.01))
+                # 空間索引預篩（dwithin 以度為單位），避免把整張地圖的地點全載入記憶體
+                pt = Point(lngf, latf, srid=4326)
                 cands = in_map.filter(
-                    latitude__isnull=False,
-                    longitude__isnull=False,
-                    latitude__gte=latf - lat_delta,
-                    latitude__lte=latf + lat_delta,
-                    longitude__gte=lngf - lng_delta,
-                    longitude__lte=lngf + lng_delta,
+                    location__isnull=False, location__dwithin=(pt, radius / 111.0)
                 )
                 for p in cands:
                     d = haversine_km(latf, lngf, p.latitude, p.longitude)

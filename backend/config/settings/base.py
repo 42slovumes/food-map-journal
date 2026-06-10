@@ -33,6 +33,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.gis",  # GeoDjango：空間欄位與查詢（PostGIS / SpatiaLite）
 ]
 
 THIRD_PARTY_APPS = [
@@ -97,13 +98,26 @@ if not DATABASE_URL and os.environ.get("POSTGRES_HOST"):
 
 if DATABASE_URL:
     DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+    # 使用 PostGIS 空間後端
+    DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 else:
+    # 本機 / 測試：SpatiaLite（檔案型空間資料庫）
     DATABASES = {
         "default": {
-            "ENGINE": "django.db.backends.sqlite3",
+            "ENGINE": "django.contrib.gis.db.backends.spatialite",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+
+# ---- GeoDjango 函式庫路徑 ----
+# Linux（Docker）通常可自動偵測；macOS（Homebrew）需指定 dylib 路徑。
+SPATIALITE_LIBRARY_PATH = os.environ.get("SPATIALITE_LIBRARY_PATH") or None
+if os.path.isdir("/opt/homebrew/lib"):  # Apple Silicon Homebrew
+    SPATIALITE_LIBRARY_PATH = SPATIALITE_LIBRARY_PATH or "/opt/homebrew/lib/mod_spatialite.dylib"
+    GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH", "/opt/homebrew/lib/libgdal.dylib")
+    GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH", "/opt/homebrew/lib/libgeos_c.dylib")
+elif os.path.isdir("/usr/local/lib") and os.path.exists("/usr/local/lib/mod_spatialite.dylib"):
+    SPATIALITE_LIBRARY_PATH = SPATIALITE_LIBRARY_PATH or "/usr/local/lib/mod_spatialite.dylib"
 
 # ---- Auth ----
 AUTH_USER_MODEL = "accounts.User"

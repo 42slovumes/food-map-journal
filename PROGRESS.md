@@ -181,6 +181,38 @@ food-map-journal/
 - share_token 回給 owner 是必要、owner-only 且冪等；撤銷後查 NULL token 立即 404（即時失效，已 live 驗證）。
 - share_token 用 UUID4（~2^122）無法列舉；PublicPlaceSerializer 欄位限制正確（審查確認「做對了」）。
 
+## PostGIS 地理空間查詢（完成）
+
+- **GeoDjango**：`django.contrib.gis`；DB engine 依環境自動選 PostGIS（Docker）/ SpatiaLite（本機·測試）；settings 自動偵測 Homebrew 函式庫路徑（GDAL/GEOS/SpatiaLite）。
+- **Place.location**：`PointField(srid=4326, spatial_index=True)`，於 `save()` 由 lat/lng 同步；migration 0004（postgis 擴充 guarded 只在 postgres 跑、AddField、回填）。
+- **附近查詢**：`location__dwithin`（走空間索引、度數預篩）+ haversine 精算排序；PlaceViewSet 與 RecommendationsView 一致；缺座標的地點自動排除。
+- **Docker**：db 換 `postgis/postgis:16-3.4`、backend 映像裝 GDAL/GEOS/PROJ。
+- **驗證**：本機 SpatiaLite 與 Docker PostGIS 都 30 測試全過（含空間附近搜尋測試）；Docker 確認 postgis 3.4.3 擴充、location POINT 幾何欄位、空間附近查詢距離排序正確。
+- **本機需求**：`brew install gdal geos proj libspatialite`（README 已載明）。
+
+## 全面回歸檢查（本輪）
+
+- 後端測試 **30 passed**（SpatiaLite 本機 + PostGIS 容器內各一輪）。
+- 前端 `pnpm build` 零錯誤。
+- 端點 sweep：maps/categories/places/presets/recommendations/nearby/healthz 全 200。
+- 瀏覽器 e2e 全通：登入、資料載入、**近我（定位＋PostGIS 空間查詢）**、即時同步、分享、公開頁、推薦。
+- 多代理全專案稽核（7 子系統 × 對抗式驗證，20 agents）對照 plan 找問題 → 10 個成立發現，分流如下。
+
+### 全專案稽核修正
+
+**已修並驗證：**
+- 登入未做 email 小寫正規化 → `EmailTokenObtainPairSerializer.validate` 補 `.lower()`（大小寫不敏感登入，live 驗證）+ 測試。
+- `UserSerializer.email` 可被 PATCH /auth/me/ 修改（身份識別不該可變）→ 加入 `read_only_fields`（live 驗證 email 不變、其他欄位可改）+ 測試。
+- **被移除成員前端處理（我前一階段引入的 bug）**：① WS `onclose` 未判 4403/4401 → 無限重連 ② 被移除後 `applyEvent` 先呼叫 `loadMembers()` 會 403 throw、導致 `reloadMaps()` 切換地圖跑不到。修正：onclose 判關閉碼不重連；applyEvent 改先 reloadMaps（自動切換到可用地圖）再 try/catch loadMembers；自己被移除時 toast 提示。e2e 驗證：提示 + 自動切換 + 不卡死。
+- ManagePage 對共編地圖未做權限 gating → 地圖編輯/刪除只給 owner、分類管理只給 owner/editor。
+- `Recommendations` 型別錯標為 `Place[]`（後端回精簡欄位）→ 新增 `RecommendationPlace` 型別。
+
+**評估後不改（誤報/刻意）：**
+- migration 0004「缺 spatial_index」為誤報：`spatial_index=True` 是 PointField 預設、Django 慣例不寫進 migration 文字但仍建 GiST 索引（已查 DB 確認 `USING gist (location)` 存在）；PROGRESS 所述指模型欄位，正確。
+- presence 廣播含自己（自己在線上清單看到自己）：你本來就在線，屬可接受設計。
+
+**最終回歸**：本機 SpatiaLite 與容器 PostGIS 各 **32 測試全過**；前端建置零錯誤；全面 e2e（登入/載入/近我空間/即時/分享/公開/推薦）全通；被移除成員流程 e2e 通過。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。

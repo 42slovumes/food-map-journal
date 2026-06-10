@@ -2,6 +2,7 @@ import uuid
 from urllib.parse import quote_plus
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 
 # 常用狀態預設值（前端會提供選單，但實際儲存為自由字串，符合 plan「狀態可自由設定」）
@@ -137,6 +138,10 @@ class Place(TimeStampedModel):
     address = models.CharField("地址", max_length=255, blank=True)
     latitude = models.FloatField("緯度", null=True, blank=True)
     longitude = models.FloatField("經度", null=True, blank=True)
+    # PostGIS / SpatiaLite 空間欄位（由 lat/lng 同步），用於有索引的附近查詢
+    location = gis_models.PointField(
+        "座標點", srid=4326, geography=False, null=True, blank=True, spatial_index=True
+    )
     google_maps_url = models.URLField("Google Maps 連結", max_length=500, blank=True)
     google_place_id = models.CharField("Google Place ID", max_length=255, blank=True)
 
@@ -200,8 +205,18 @@ class Place(TimeStampedModel):
             return f"https://www.google.com/maps/search/?api=1&query={quote_plus(self.name)}"
         return ""
 
+    def sync_location(self):
+        """由 lat/lng 同步空間欄位 location。"""
+        if self.latitude is not None and self.longitude is not None:
+            from django.contrib.gis.geos import Point
+
+            self.location = Point(self.longitude, self.latitude, srid=4326)
+        else:
+            self.location = None
+
     def save(self, *args, **kwargs):
         self.google_maps_url = self.ensure_google_maps_url()
+        self.sync_location()
         super().save(*args, **kwargs)
 
 

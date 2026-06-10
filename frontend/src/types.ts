@@ -28,11 +28,31 @@ export interface MapBoard {
   updated_at: string;
 }
 
+/** 推薦端點回傳的精簡地點（省略 want_reason/experience_note 等個人欄位） */
+export interface RecommendationPlace {
+  id: number;
+  category: number;
+  category_name: string;
+  category_color: string;
+  category_icon: string;
+  map: number;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  google_maps_url: string;
+  status: string;
+  rating: number | null;
+  tags: string[];
+  created_by_name: string | null;
+  distance_km: number | null;
+}
+
 export interface Recommendations {
-  high_rated: Place[];
-  nearby: Place[];
-  wishlist: Place[];
-  friends: Place[];
+  high_rated: RecommendationPlace[];
+  nearby: RecommendationPlace[];
+  wishlist: RecommendationPlace[];
+  friends: RecommendationPlace[];
 }
 
 export interface PublicPlace {

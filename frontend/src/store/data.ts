@@ -336,8 +336,14 @@ export const useData = create<DataState>((set, get) => ({
         set({ categories });
       }
     } else if (event.startsWith("collaborator.") || event === "permission.updated") {
-      await get().loadMembers();
+      // 先重抓地圖（被移除時要優先切換離開不可存取的地圖）
       await reloadMaps(set, get);
+      // 再更新成員清單；若自己已被移除會 403，忽略即可
+      try {
+        await get().loadMembers();
+      } catch {
+        /* 已非成員，無法讀取成員清單 */
+      }
     }
   },
 }));
@@ -360,5 +366,10 @@ async function reloadMaps(
 ) {
   const maps = await mapsApi.list();
   set({ maps });
-  void get;
+  // 若目前地圖已不可存取（例如自己被移除），自動切換到第一張可用地圖
+  const { activeMapId } = get();
+  const active = maps.find((m) => m.id === activeMapId);
+  if ((!active || active.my_role == null) && maps[0]) {
+    await get().setActiveMap(maps[0].id);
+  }
 }

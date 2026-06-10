@@ -7,6 +7,11 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
+# GeoDjango 需要的空間函式庫（GDAL / GEOS / PROJ）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    binutils libproj-dev gdal-bin libgdal-dev libgeos-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # uv 二進位
 COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /usr/local/bin/uv
 

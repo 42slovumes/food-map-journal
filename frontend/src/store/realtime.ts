@@ -62,9 +62,12 @@ function openSocket(mapId: number, set: (p: Partial<RealtimeState>) => void) {
   socket = ws;
 
   ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
-  ws.onclose = () => {
-    if (intentionalClose || currentMapId !== mapId) return;
+  ws.onclose = (event) => {
     useRealtime.setState({ status: "closed", online: [] });
+    // 4401 未登入 / 4403 非成員（被移除）：不要重連，避免無限重試迴圈
+    if (event.code === 4401 || event.code === 4403 || intentionalClose || currentMapId !== mapId) {
+      return;
+    }
     retry += 1;
     const delay = Math.min(1000 * 2 ** (retry - 1), 10000); // 1s,2s,4s,8s,10s...
     reconnectTimer = setTimeout(() => openSocket(mapId, set), delay);
@@ -96,8 +99,15 @@ function handleMessage(msg: any) {
   // 資料事件 → 套用到 data store
   void useData.getState().applyEvent(event, payload, actor ?? null);
 
-  // 別人的動作才提示（自己的動作本機已即時反映）
   const myId = useAuth.getState().user?.id;
+
+  // 自己被移出地圖：提示並停止重連（後端會以 4403 關閉；applyEvent 會切換到其他可用地圖）
+  if (event === "collaborator.removed" && payload?.user_id === myId) {
+    toast.info("你已被移出此地圖");
+    return;
+  }
+
+  // 別人的動作才提示（自己的動作本機已即時反映）
   if (actor && actor.id !== myId) {
     const who = actor.display_name;
     const name = payload?.place?.name ?? payload?.category?.name ?? "";

@@ -6,7 +6,7 @@ import { FullSpinner } from "@/components/ui/Spinner";
 import { recommendationsApi } from "@/lib/api";
 import { formatDistance, googleMapsUrl, statusTone } from "@/lib/format";
 import { useData } from "@/store/data";
-import type { Place, Recommendations } from "@/types";
+import type { RecommendationPlace, Recommendations } from "@/types";
 
 type Tab = "high_rated" | "wishlist" | "nearby" | "friends";
 
@@ -40,7 +40,7 @@ export default function DiscoverPage() {
   }, [activeMapId, userLocation]);
 
   const meta = TABS.find((t) => t.key === tab)!;
-  const list: Place[] = useMemo(() => recs?.[tab] ?? [], [recs, tab]);
+  const list: RecommendationPlace[] = useMemo(() => recs?.[tab] ?? [], [recs, tab]);
 
   return (
     <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-28 pt-5 md:px-8 md:pb-8">
@@ -101,7 +101,7 @@ export default function DiscoverPage() {
   );
 }
 
-function DiscoverCard({ place, reason }: { place: Place; reason: string }) {
+function DiscoverCard({ place, reason }: { place: RecommendationPlace; reason: string }) {
   const distance = formatDistance(place.distance_km);
   return (
     <div className="card flex flex-col gap-2 p-4">
