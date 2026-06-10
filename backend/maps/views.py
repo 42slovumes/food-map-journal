@@ -3,9 +3,11 @@ import math
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import status, viewsets
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .events import broadcast_event
 from .models import ROLE_EDITOR, ROLE_VIEWER, Category, Collaborator, Map, Place
@@ -15,6 +17,9 @@ from .serializers import (
     CollaboratorSerializer,
     MapSerializer,
     PlaceSerializer,
+    PublicCategorySerializer,
+    PublicPlaceSerializer,
+    RecommendationPlaceSerializer,
 )
 
 User = get_user_model()
@@ -52,6 +57,18 @@ class MapViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    @action(detail=True, methods=["post", "delete"])
+    def share(self, request, pk=None):
+        """產生 / 撤銷公開分享連結（owner 限定）。"""
+        m = self.get_object()
+        if not m.can_manage(request.user):
+            raise PermissionDenied("只有擁有者可以管理分享連結。")
+        if request.method == "POST":
+            token = m.enable_share()
+            return Response({"is_shared": True, "share_token": str(token)})
+        m.disable_share()
+        return Response({"is_shared": False, "share_token": None})
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -260,3 +277,109 @@ class CollaboratorViewSet(viewsets.ModelViewSet):
             map_id, "collaborator.removed", {"user_id": user_id}, actor=request.user
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PublicMapView(APIView):
+    """公開唯讀地圖（免登入），需有效 share_token。"""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        m = get_object_or_404(Map, share_token=token)
+        categories = (
+            m.categories.annotate(places_count=Count("places", distinct=True))
+            .order_by("sort_order", "id")
+        )
+        places = (
+            Place.objects.filter(category__map=m)
+            .select_related("category")
+            .order_by("-updated_at")
+        )
+        return Response(
+            {
+                "map": {
+                    "id": m.id,
+                    "name": m.name,
+                    "emoji": m.emoji,
+                    "description": m.description,
+                    "owner_name": m.owner.display_name,
+                    "categories_count": categories.count(),
+                    "places_count": places.count(),
+                },
+                "categories": PublicCategorySerializer(categories, many=True).data,
+                "places": PublicPlaceSerializer(places, many=True).data,
+            }
+        )
+
+
+class RecommendationsView(APIView):
+    """智慧推薦（第一階段規則式，多訊號＋理由）。
+
+    回傳分組：高評價、附近順路、想去清單、朋友也收藏（你參與共編的地圖裡別人的收藏）。
+    """
+
+    def get(self, request):
+        user = request.user
+        map_id = request.query_params.get("map")
+
+        accessible = (
+            Place.objects.filter(
+                Q(category__map__owner=user) | Q(category__map__collaborators__user=user)
+            )
+            .select_related("category", "category__map", "created_by")
+            .distinct()
+        )
+        in_map = accessible.filter(category__map_id=map_id) if map_id else accessible
+
+        high_rated = list(in_map.filter(rating__gte=4).order_by("-rating", "-updated_at")[:12])
+        wishlist = list(
+            in_map.filter(status__in=["想去", "一定要去", "想再訪"]).order_by("-updated_at")[:12]
+        )
+
+        nearby = []
+        lat, lng = request.query_params.get("lat"), request.query_params.get("lng")
+        if lat and lng:
+            try:
+                latf, lngf = float(lat), float(lng)
+                radius = 10.0
+                # 先用 bounding box 粗篩，避免把整張地圖的地點全載入記憶體
+                lat_delta = radius / 111.0
+                lng_delta = radius / (111.0 * max(math.cos(math.radians(latf)), 0.01))
+                cands = in_map.filter(
+                    latitude__isnull=False,
+                    longitude__isnull=False,
+                    latitude__gte=latf - lat_delta,
+                    latitude__lte=latf + lat_delta,
+                    longitude__gte=lngf - lng_delta,
+                    longitude__lte=lngf + lng_delta,
+                )
+                for p in cands:
+                    d = haversine_km(latf, lngf, p.latitude, p.longitude)
+                    if d <= radius:
+                        p.distance_km = d
+                        nearby.append(p)
+                nearby.sort(key=lambda x: x.distance_km)
+                nearby = nearby[:12]
+            except ValueError:
+                pass
+
+        # 朋友也收藏：我參與共編（非我擁有）的地圖裡的高評價地點
+        friends = list(
+            Place.objects.filter(category__map__collaborators__user=user)
+            .exclude(category__map__owner=user)
+            .filter(rating__gte=4)
+            .select_related("category", "category__map", "created_by")
+            .order_by("-rating", "-updated_at")
+            .distinct()[:12]
+        )
+
+        ctx = {"request": request}
+        S = RecommendationPlaceSerializer
+        return Response(
+            {
+                "high_rated": S(high_rated, many=True, context=ctx).data,
+                "nearby": S(nearby, many=True, context=ctx).data,
+                "wishlist": S(wishlist, many=True, context=ctx).data,
+                "friends": S(friends, many=True, context=ctx).data,
+            }
+        )

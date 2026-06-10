@@ -45,6 +45,8 @@ interface DataState {
   createMap: (payload: Partial<MapBoard>) => Promise<MapBoard>;
   updateMap: (id: number, payload: Partial<MapBoard>) => Promise<void>;
   deleteMap: (id: number) => Promise<void>;
+  enableShare: (id: number) => Promise<string>;
+  disableShare: (id: number) => Promise<void>;
 
   createCategory: (payload: Partial<Category>) => Promise<Category>;
   updateCategory: (id: number, payload: Partial<Category>) => Promise<void>;
@@ -204,6 +206,19 @@ export const useData = create<DataState>((set, get) => ({
     if (get().activeMapId === id && remaining[0]) {
       await get().setActiveMap(remaining[0].id);
     }
+  },
+  async enableShare(id) {
+    const { share_token } = await mapsApi.enableShare(id);
+    set((s) => ({
+      maps: s.maps.map((m) => (m.id === id ? { ...m, is_shared: true, share_token } : m)),
+    }));
+    return share_token;
+  },
+  async disableShare(id) {
+    await mapsApi.disableShare(id);
+    set((s) => ({
+      maps: s.maps.map((m) => (m.id === id ? { ...m, is_shared: false, share_token: null } : m)),
+    }));
   },
 
   // ---- Category CRUD ----

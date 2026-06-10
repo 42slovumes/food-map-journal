@@ -9,6 +9,7 @@ import AuthPage from "@/pages/AuthPage";
 import DiscoverPage from "@/pages/DiscoverPage";
 import ManagePage from "@/pages/ManagePage";
 import MapPage from "@/pages/MapPage";
+import PublicMapPage from "@/pages/PublicMapPage";
 import SettingsPage from "@/pages/SettingsPage";
 import { useAuth } from "@/store/auth";
 import { useData } from "@/store/data";
@@ -60,6 +61,8 @@ export default function App() {
         path="/login"
         element={status === "authed" ? <Navigate to="/" replace /> : <AuthPage />}
       />
+      {/* 公開分享頁：免登入唯讀 */}
+      <Route path="/share/:token" element={<PublicMapPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<BootstrapGate />}>
           <Route element={<AppLayout />}>

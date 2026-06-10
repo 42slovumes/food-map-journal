@@ -90,6 +90,8 @@ class MapSerializer(serializers.ModelSerializer):
     collaborators_count = serializers.SerializerMethodField()
     owner = serializers.IntegerField(source="owner_id", read_only=True)
     owner_name = serializers.CharField(source="owner.display_name", read_only=True)
+    is_shared = serializers.SerializerMethodField()
+    share_token = serializers.SerializerMethodField()
 
     class Meta:
         model = Map
@@ -105,6 +107,8 @@ class MapSerializer(serializers.ModelSerializer):
             "my_role",
             "owner",
             "owner_name",
+            "is_shared",
+            "share_token",
             "created_at",
             "updated_at",
         ]
@@ -116,9 +120,21 @@ class MapSerializer(serializers.ModelSerializer):
             "my_role",
             "owner",
             "owner_name",
+            "is_shared",
+            "share_token",
             "created_at",
             "updated_at",
         ]
+
+    def get_is_shared(self, obj):
+        return obj.share_token is not None
+
+    def get_share_token(self, obj):
+        # 分享 token 只回給擁有者
+        request = self.context.get("request")
+        if request and obj.owner_id == getattr(request.user, "id", None) and obj.share_token:
+            return str(obj.share_token)
+        return None
 
     def get_my_role(self, obj):
         request = self.context.get("request")
@@ -156,3 +172,83 @@ class CollaboratorSerializer(serializers.ModelSerializer):
             url = user.avatar.url
             return request.build_absolute_uri(url) if request else url
         return user.avatar_url or None
+
+
+class PublicCategorySerializer(serializers.ModelSerializer):
+    """公開分享用的分類（只回展示欄位，不外洩 is_public/is_collaborative/map/owner）。"""
+
+    places_count = serializers.SerializerMethodField()
+
+    def get_places_count(self, obj):
+        val = getattr(obj, "places_count", None)
+        return val if val is not None else obj.places.count()
+
+    class Meta:
+        model = Category
+        fields = ["id", "name", "description", "color", "icon", "sort_order", "places_count"]
+        read_only_fields = fields
+
+
+class RecommendationPlaceSerializer(serializers.ModelSerializer):
+    """推薦用的精簡地點：保留卡片所需欄位，省略 want_reason/experience_note 等個人欄位。"""
+
+    map = serializers.IntegerField(source="map_id", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_color = serializers.CharField(source="category.color", read_only=True)
+    category_icon = serializers.CharField(source="category.icon", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.display_name", read_only=True)
+    distance_km = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Place
+        fields = [
+            "id",
+            "category",
+            "category_name",
+            "category_color",
+            "category_icon",
+            "map",
+            "name",
+            "address",
+            "latitude",
+            "longitude",
+            "google_maps_url",
+            "status",
+            "rating",
+            "tags",
+            "created_by_name",
+            "distance_km",
+        ]
+        read_only_fields = fields
+
+    def get_distance_km(self, obj):
+        value = getattr(obj, "distance_km", None)
+        return round(value, 2) if value is not None else None
+
+
+class PublicPlaceSerializer(serializers.ModelSerializer):
+    """公開分享用的精簡地點（不外洩建立者、想去原因、體驗等私人欄位）。"""
+
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_color = serializers.CharField(source="category.color", read_only=True)
+    category_icon = serializers.CharField(source="category.icon", read_only=True)
+
+    class Meta:
+        model = Place
+        fields = [
+            "id",
+            "category",
+            "category_name",
+            "category_color",
+            "category_icon",
+            "name",
+            "address",
+            "latitude",
+            "longitude",
+            "google_maps_url",
+            "status",
+            "rating",
+            "tags",
+            "note",
+        ]
+        read_only_fields = fields

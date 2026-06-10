@@ -171,6 +171,72 @@ def test_cannot_move_category_to_unauthorized_map(world):
     assert world["cat"].map_id == world["map"].id
 
 
+def test_share_enable_and_public_read(world):
+    # owner 開啟公開分享
+    r = auth(world["owner"]).post(f"/api/v1/maps/{world['map'].id}/share/")
+    assert r.status_code == 200 and r.json()["is_shared"] is True
+    token = r.json()["share_token"]
+    # 免登入即可讀公開地圖
+    pub = APIClient().get(f"/api/v1/public/maps/{token}/")
+    assert pub.status_code == 200
+    body = pub.json()
+    assert body["map"]["name"] == "共享地圖"
+    assert any(p["name"] == "店A" for p in body["places"])
+    # 公開 payload 不外洩私人欄位
+    assert "want_reason" not in body["places"][0]
+    assert "created_by" not in body["places"][0]
+    # 公開分類不外洩內部旗標
+    assert "is_public" not in body["categories"][0]
+    assert "is_collaborative" not in body["categories"][0]
+
+
+def test_public_404_when_not_shared(world):
+    import uuid as _uuid
+
+    r = APIClient().get(f"/api/v1/public/maps/{_uuid.uuid4()}/")
+    assert r.status_code == 404
+
+
+def test_only_owner_can_share(world):
+    r = auth(world["editor"]).post(f"/api/v1/maps/{world['map'].id}/share/")
+    assert r.status_code == 403
+
+
+def test_share_token_only_visible_to_owner(world):
+    auth(world["owner"]).post(f"/api/v1/maps/{world['map'].id}/share/")
+    owner_view = auth(world["owner"]).get("/api/v1/maps/").json()["results"][0]
+    assert owner_view["is_shared"] is True and owner_view["share_token"]
+    viewer_view = auth(world["viewer"]).get("/api/v1/maps/").json()["results"][0]
+    assert viewer_view["is_shared"] is True
+    assert viewer_view["share_token"] is None  # 非 owner 看不到 token
+
+
+def test_recommendations_groups(world):
+    Place.objects.create(
+        category=world["cat"], name="高分店", rating=5, status="已去",
+        created_by=world["owner"], updated_by=world["owner"],
+    )
+    r = auth(world["owner"]).get(f"/api/v1/recommendations/?map={world['map'].id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert {"high_rated", "nearby", "wishlist", "friends"} <= set(data)
+    assert any(p["name"] == "高分店" for p in data["high_rated"])
+    # 推薦精簡序列化器不外洩個人欄位
+    assert "want_reason" not in data["high_rated"][0]
+    assert "experience_note" not in data["high_rated"][0]
+
+
+def test_recommendations_friends_from_collab_maps(world):
+    # owner 的高評價地點應出現在 editor 的「朋友也收藏」
+    Place.objects.create(
+        category=world["cat"], name="朋友推的店", rating=5, status="已去",
+        created_by=world["owner"], updated_by=world["owner"],
+    )
+    r = auth(world["editor"]).get("/api/v1/recommendations/")
+    assert r.status_code == 200
+    assert any(p["name"] == "朋友推的店" for p in r.json()["friends"])
+
+
 def test_my_role_reported_in_map_list(world):
     owner_maps = auth(world["owner"]).get("/api/v1/maps/").json()["results"]
     assert owner_maps[0]["my_role"] == "owner"

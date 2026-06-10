@@ -22,8 +22,48 @@ export interface MapBoard {
   my_role: Role | null;
   owner: number;
   owner_name: string;
+  is_shared: boolean;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Recommendations {
+  high_rated: Place[];
+  nearby: Place[];
+  wishlist: Place[];
+  friends: Place[];
+}
+
+export interface PublicPlace {
+  id: number;
+  category: number;
+  category_name: string;
+  category_color: string;
+  category_icon: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  google_maps_url: string;
+  status: string;
+  rating: number | null;
+  tags: string[];
+  note: string;
+}
+
+export interface PublicMapData {
+  map: {
+    id: number;
+    name: string;
+    emoji: string;
+    description: string;
+    owner_name: string;
+    categories_count: number;
+    places_count: number;
+  };
+  categories: Category[];
+  places: PublicPlace[];
 }
 
 export interface Collaborator {

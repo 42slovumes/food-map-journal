@@ -7,6 +7,7 @@ import {
   Navigation,
   Plus,
   Search,
+  Share2,
   SlidersHorizontal,
   Users,
   X,
@@ -19,6 +20,7 @@ import { MapForm } from "@/components/MapForm";
 import { MapSwitcher } from "@/components/MapSwitcher";
 import { MembersDialog } from "@/components/MembersDialog";
 import { PlaceDetail } from "@/components/PlaceDetail";
+import { ShareDialog } from "@/components/ShareDialog";
 import { PlaceForm } from "@/components/PlaceForm";
 import { PlaceList } from "@/components/PlaceList";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -69,6 +71,7 @@ export default function MapPage() {
   const [catFormOpen, setCatFormOpen] = useState(false);
   const [mapFormOpen, setMapFormOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Place | null>(null);
 
   const selectedPlace = useMemo(
@@ -242,6 +245,14 @@ export default function MapPage() {
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-emerald-500" />
             )}
           </button>
+
+          <button
+            onClick={() => setShareOpen(true)}
+            className="btn-outline shrink-0 px-3 py-2 text-sm"
+            title="分享地圖"
+          >
+            <Share2 size={16} />
+          </button>
         </div>
 
         {/* 手機搜尋列 */}
@@ -323,6 +334,7 @@ export default function MapPage() {
       <CategoryForm open={catFormOpen} onClose={() => setCatFormOpen(false)} />
       <MapForm open={mapFormOpen} onClose={() => setMapFormOpen(false)} />
       <MembersDialog open={membersOpen} onClose={() => setMembersOpen(false)} />
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
       <ConfirmDialog
         open={!!deleteTarget}
         title="刪除這個地點？"

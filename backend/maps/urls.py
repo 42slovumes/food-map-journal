@@ -2,7 +2,14 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .meta_views import PresetsView
-from .views import CategoryViewSet, CollaboratorViewSet, MapViewSet, PlaceViewSet
+from .views import (
+    CategoryViewSet,
+    CollaboratorViewSet,
+    MapViewSet,
+    PlaceViewSet,
+    PublicMapView,
+    RecommendationsView,
+)
 
 router = DefaultRouter()
 router.register("maps", MapViewSet, basename="map")
@@ -17,6 +24,8 @@ collaborator_detail = CollaboratorViewSet.as_view(
 
 urlpatterns = [
     path("meta/presets/", PresetsView.as_view(), name="presets"),
+    path("recommendations/", RecommendationsView.as_view(), name="recommendations"),
+    path("public/maps/<uuid:token>/", PublicMapView.as_view(), name="public-map"),
     path("maps/<int:map_pk>/collaborators/", collaborator_list, name="collaborator-list"),
     path(
         "maps/<int:map_pk>/collaborators/<int:pk>/",

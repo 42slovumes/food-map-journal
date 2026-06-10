@@ -7,6 +7,8 @@ import type {
   Paginated,
   Place,
   Presets,
+  PublicMapData,
+  Recommendations,
   User,
 } from "@/types";
 
@@ -134,6 +136,32 @@ export const mapsApi = {
   },
   async remove(id: number) {
     await api.delete(`/maps/${id}/`);
+  },
+  async enableShare(id: number) {
+    const { data } = await api.post<{ is_shared: boolean; share_token: string }>(
+      `/maps/${id}/share/`,
+    );
+    return data;
+  },
+  async disableShare(id: number) {
+    const { data } = await api.delete<{ is_shared: boolean; share_token: null }>(
+      `/maps/${id}/share/`,
+    );
+    return data;
+  },
+};
+
+export const recommendationsApi = {
+  async get(query: { map?: number; lat?: number; lng?: number } = {}) {
+    const { data } = await api.get<Recommendations>("/recommendations/", { params: query });
+    return data;
+  },
+};
+
+export const publicApi = {
+  async getMap(token: string) {
+    const { data } = await api.get<PublicMapData>(`/public/maps/${token}/`);
+    return data;
   },
 };
 

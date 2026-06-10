@@ -151,6 +151,36 @@ food-map-journal/
 - 成員互看 email/建立者/操作者 → 協作工具設計常態（如 Google Docs 顯示協作者）。
 - map.deleted 廣播、角色查詢 N+1 → 後續優化。
 
+## 第三階段：圖片產出與分享 + 公開連結 + 智慧推薦（完成）
+
+**後端**
+- 智慧推薦 `GET /api/v1/recommendations/?map=&lat=&lng=`：分組回傳高評價/附近/想去/朋友也收藏（共編地圖的高分地點），各帶理由；只回傳使用者可存取的地點。
+- 公開分享：`Map.share_token`（UUID4，migration 0003）；`POST/DELETE /maps/{id}/share/`（owner 限定）產生/撤銷；`GET /public/maps/{token}/` 免登入唯讀，用 `PublicPlaceSerializer` 精簡欄位（不外洩建立者/想去原因/體驗/place_id）；share_token 只回給 owner。
+
+**前端**
+- ShareDialog：公開連結開關＋複製＋LINE/FB/Threads/系統分享；ShareCard 排行榜圖卡（可選顯示評分/標籤/地址/備註）以 html-to-image 下載 PNG。
+- PublicMapPage（`/share/:token`）：免登入唯讀地圖＋清單＋marker＋「建立你的地圖」CTA。
+- DiscoverPage 改用後端推薦 API，分組 tabs 含計數與理由（含「朋友也收藏」）。
+
+**驗證**
+- 後端測試 29 個全過（含公開分享免登入讀取、未分享 404、僅 owner 可分享、share_token 僅 owner 可見、推薦分組、朋友也收藏、公開 payload 不外洩私人欄位）。
+- 瀏覽器：分享圖卡渲染（排行榜 7 筆）＋公開連結＋社群按鈕；公開頁免登入正常顯示地圖/清單；推薦頁分組 tabs 與卡片正常。
+
+**PostGIS 決策**：plan 列為地理查詢「優化」。目前 haversine + bounding box 已完整滿足附近搜尋功能；導入 PostGIS 需換 PostGIS 映像 + GeoDjango（GDAL/GEOS）且會破壞本機 SQLite 開發路徑，屬高風險純優化 → 列為選用的正式環境優化，README 記錄升級路徑。
+
+### 第三階段安全審查（多代理對抗式，19 agents，7 個成立發現）
+
+**已修並驗證：**
+- 公開端點分類序列化外洩 `is_public`/`is_collaborative` → 改用 `PublicCategorySerializer` 精簡欄位（live 驗證不再外洩）。
+- 推薦回傳完整 PlaceSerializer（含 want_reason/experience_note）→ 改用 `RecommendationPlaceSerializer`（卡片本就不顯示這些；縱深防禦）。
+- 推薦的附近查詢缺 bounding box → 比照 PlaceViewSet 加粗篩，避免記憶體放大。
+- 加測試斷言（公開分類無內部旗標、推薦無個人欄位），共 29 測試全過。
+
+**評估後不改（記錄）：**
+- friends 「外洩非共編地圖」為誤報：queryset 以 `collaborators__user=user` 限定＝確實是分享給該使用者的地圖；且共編者本就能透過 /places/ 讀到（非新外洩）。
+- share_token 回給 owner 是必要、owner-only 且冪等；撤銷後查 NULL token 立即 404（即時失效，已 live 驗證）。
+- share_token 用 UUID4（~2^122）無法列舉；PublicPlaceSerializer 欄位限制正確（審查確認「做對了」）。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。

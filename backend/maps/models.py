@@ -1,3 +1,4 @@
+import uuid
 from urllib.parse import quote_plus
 
 from django.conf import settings
@@ -55,6 +56,19 @@ class Map(TimeStampedModel):
     description = models.TextField("描述", blank=True)
     emoji = models.CharField("圖示", max_length=8, blank=True, default="🗺️")
     is_public = models.BooleanField("是否公開", default=False)
+    # 公開分享連結 token（有值＝已開啟公開分享）
+    share_token = models.UUIDField("分享 token", null=True, blank=True, unique=True, editable=False)
+
+    def enable_share(self) -> uuid.UUID:
+        if not self.share_token:
+            self.share_token = uuid.uuid4()
+            self.save(update_fields=["share_token", "updated_at"])
+        return self.share_token
+
+    def disable_share(self) -> None:
+        if self.share_token:
+            self.share_token = None
+            self.save(update_fields=["share_token", "updated_at"])
 
     class Meta:
         verbose_name = "地圖"

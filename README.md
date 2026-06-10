@@ -17,8 +17,10 @@
 - **單一分類切換**：chips 一鍵只看某個分類。
 - **附近搜尋**：依目前位置，列出附近已收藏的地點並按距離排序。
 - **Google Maps 高度整合**：每個地點自動產生 Google Maps 連結，一鍵開啟導航。
-- **探索推薦（第一階段，規則式）**：高評價 / 想去清單 / 附近順路。
 - **共編協作 + 即時同步（第二階段）**：以 email 邀請成員、權限分 Owner/Editor/Viewer；透過 WebSocket（Django Channels + Redis）即時同步地點/分類新增・修改・刪除與成員/權限變更；線上成員指示、他人動作提示、斷線自動重連；Viewer 介面唯讀。
+- **圖片產出與分享（第三階段）**：一鍵產生美觀排行榜分享圖卡（可選顯示評分/標籤/地址/備註、下載 PNG）；產生公開唯讀分享連結，分享到 LINE / Facebook / Threads / 系統分享。
+- **公開分享頁**：免登入的唯讀地圖頁（`/share/:token`），含地圖、清單與 Google Maps 跳轉。
+- **智慧推薦（第三階段，後端多訊號）**：高評價 / 想去清單 / 附近順路 / 朋友也收藏（共編夥伴的高分收藏），各帶推薦理由。
 - **進階模式開關**：把高密度欄位與篩選收進設定，預設保持清爽。
 - **雙模式地圖**：有 `VITE_GOOGLE_MAPS_API_KEY` 用 Google Maps；沒有則自動降級 Leaflet + OpenStreetMap。
 - **三環境設定**：development / staging / production。
@@ -152,6 +154,9 @@ food-map-journal/
 | GET | `/api/v1/places/?lat=&lng=&radius=` | 附近搜尋（回傳 `distance_km`，依距離排序） |
 | GET/POST | `/api/v1/maps/{id}/collaborators/` | 列出 / 以 email 邀請共編者（owner） |
 | PATCH/DELETE | `/api/v1/maps/{id}/collaborators/{cid}/` | 改角色 / 移除（owner）或成員自行退出 |
+| POST/DELETE | `/api/v1/maps/{id}/share/` | 產生 / 撤銷公開分享連結（owner） |
+| GET | `/api/v1/public/maps/{token}/` | 公開唯讀地圖（免登入，精簡欄位） |
+| GET | `/api/v1/recommendations/?map=&lat=&lng=` | 智慧推薦分組：高評價 / 想去 / 附近 / 朋友也收藏 |
 | GET | `/api/v1/meta/presets/` | 狀態 / 顏色 / 標籤 / 圖示建議 |
 | WS | `ws://<host>/ws/maps/{id}/?token=<access>` | 即時同步：成員連線後接收 place/category/collaborator 等事件與上線狀態 |
 
@@ -165,4 +170,5 @@ food-map-journal/
 
 - ~~**第一階段**：穩固可運行 MVP。~~ ✅ 完成
 - ~~**第二階段**：共編協作 + Django Channels + Redis + WebSocket 即時同步、權限管理。~~ ✅ 完成
-- **第三階段**：地圖/清單圖片產出與社群分享、智慧推薦進階版、PostGIS 地理查詢優化、持久化操作紀錄。
+- ~~**第三階段**：地圖/清單圖片產出與社群分享、公開分享連結、智慧推薦。~~ ✅ 完成
+- **後續優化**：PostGIS 地理空間查詢（目前以 haversine + bounding box 達成附近搜尋，功能已滿足；PostGIS 為正式環境的效能優化，需換 PostGIS 映像 + GeoDjango，列為選用）、持久化操作紀錄、相似度/順路推薦。
