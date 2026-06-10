@@ -259,6 +259,23 @@ def test_recommendations_friends_from_collab_maps(world):
     assert any(p["name"] == "朋友推的店" for p in r.json()["friends"])
 
 
+def test_map_list_no_n_plus_1(world, django_assert_max_num_queries):
+    # 多建地圖各帶共編者；查詢數應為常數級（不隨地圖數線性成長）
+    owner = world["owner"]
+    for i in range(6):
+        m = Map.objects.create(owner=owner, name=f"地圖{i}")
+        Collaborator.objects.create(map=m, user=world["editor"], role=ROLE_EDITOR)
+        Collaborator.objects.create(map=m, user=world["viewer"], role=ROLE_VIEWER)
+    client = auth(owner)
+    with django_assert_max_num_queries(8):
+        r = client.get("/api/v1/maps/")
+    assert r.status_code == 200
+    assert r.json()["count"] >= 7
+    # collaborators_count 正確（owner 的地圖各 2 名共編者）
+    extra = [m for m in r.json()["results"] if m["name"].startswith("地圖")]
+    assert all(m["collaborators_count"] == 2 for m in extra)
+
+
 def test_my_role_reported_in_map_list(world):
     owner_maps = auth(world["owner"]).get("/api/v1/maps/").json()["results"]
     assert owner_maps[0]["my_role"] == "owner"

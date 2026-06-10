@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/components/ui/Toast";
+import { apiErrorMessage } from "@/lib/errors";
 import { useAuth } from "@/store/auth";
 import { useData } from "@/store/data";
 import { useRealtime } from "@/store/realtime";
@@ -53,8 +54,8 @@ export function MembersDialog({ open, onClose }: Props) {
       await invite(email.trim(), role);
       toast.success("已邀請成員");
       setEmail("");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.email ?? err?.response?.data?.detail ?? "邀請失敗");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "邀請失敗"));
     } finally {
       setInviting(false);
     }

@@ -45,6 +45,8 @@ class MapViewSet(viewsets.ModelViewSet):
         user = self.request.user
         return (
             Map.objects.filter(Q(owner=user) | Q(collaborators__user=user))
+            .select_related("owner")  # owner_name 不再 N+1
+            .prefetch_related("collaborators")  # my_role / collaborators_count 走記憶體
             .annotate(
                 categories_count=Count("categories", distinct=True),
                 places_count=Count("categories__places", distinct=True),
@@ -52,9 +54,6 @@ class MapViewSet(viewsets.ModelViewSet):
             .distinct()
             .order_by("-updated_at")
         )
-
-    def get_serializer_context(self):
-        return {**super().get_serializer_context(), "request": self.request}
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -198,14 +197,16 @@ class CollaboratorViewSet(viewsets.ModelViewSet):
 
     serializer_class = CollaboratorSerializer
 
-    def get_serializer_context(self):
-        return {**super().get_serializer_context(), "request": self.request}
-
     def get_map(self) -> Map:
-        m = get_object_or_404(Map, pk=self.kwargs["map_pk"])
-        if not m.can_view(self.request.user):
-            raise PermissionDenied("沒有存取這張地圖的權限。")
-        return m
+        # 每個 request 內快取，並 prefetch collaborators 讓 can_view/can_manage 走記憶體查找
+        if not hasattr(self, "_map"):
+            m = get_object_or_404(
+                Map.objects.prefetch_related("collaborators"), pk=self.kwargs["map_pk"]
+            )
+            if not m.can_view(self.request.user):
+                raise PermissionDenied("沒有存取這張地圖的權限。")
+            self._map = m
+        return self._map
 
     def get_queryset(self):
         return self.get_map().collaborators.select_related("user", "invited_by").order_by(
@@ -279,16 +280,15 @@ class PublicMapView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, token):
-        m = get_object_or_404(Map, share_token=token)
-        categories = (
-            m.categories.annotate(places_count=Count("places", distinct=True))
-            .order_by("sort_order", "id")
+        m = get_object_or_404(Map.objects.select_related("owner"), share_token=token)
+        categories = m.categories.annotate(places_count=Count("places", distinct=True)).order_by(
+            "sort_order", "id"
         )
         places = (
-            Place.objects.filter(category__map=m)
-            .select_related("category")
-            .order_by("-updated_at")
+            Place.objects.filter(category__map=m).select_related("category").order_by("-updated_at")
         )
+        cat_data = PublicCategorySerializer(categories, many=True).data
+        place_data = PublicPlaceSerializer(places, many=True).data
         return Response(
             {
                 "map": {
@@ -297,11 +297,11 @@ class PublicMapView(APIView):
                     "emoji": m.emoji,
                     "description": m.description,
                     "owner_name": m.owner.display_name,
-                    "categories_count": categories.count(),
-                    "places_count": places.count(),
+                    "categories_count": len(cat_data),  # 用序列化結果，免額外 COUNT 查詢
+                    "places_count": len(place_data),
                 },
-                "categories": PublicCategorySerializer(categories, many=True).data,
-                "places": PublicPlaceSerializer(places, many=True).data,
+                "categories": cat_data,
+                "places": place_data,
             }
         )
 

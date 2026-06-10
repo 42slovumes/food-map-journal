@@ -42,9 +42,6 @@ class MeView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
-    def get_serializer_context(self):
-        return {**super().get_serializer_context(), "request": self.request}
-
 
 def _unique_username(base: str) -> str:
     base = (base or "user").split("@")[0][:24] or "user"

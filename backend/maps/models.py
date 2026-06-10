@@ -86,8 +86,11 @@ class Map(TimeStampedModel):
             return None
         if self.owner_id == user.id:
             return ROLE_OWNER
-        collab = self.collaborators.filter(user=user).first()
-        return collab.role if collab else None
+        # 走記憶體查找：列表端點以 prefetch_related('collaborators') 快取，避免 N+1
+        for collab in self.collaborators.all():
+            if collab.user_id == user.id:
+                return collab.role
+        return None
 
     def can_view(self, user) -> bool:
         return self.role_for(user) is not None

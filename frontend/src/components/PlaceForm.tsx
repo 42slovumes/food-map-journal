@@ -5,6 +5,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { StarRating } from "@/components/ui/StarRating";
 import { toast } from "@/components/ui/Toast";
+import { apiErrorMessage } from "@/lib/errors";
 import { type GeoResult, searchPlaces } from "@/lib/geocode";
 import { withAlpha } from "@/lib/format";
 import type { LatLng } from "@/map/types";
@@ -141,8 +142,8 @@ export function PlaceForm({ open, onClose, initial, defaultCoords, defaultCatego
         toast.success("已新增地點");
       }
       onClose();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "儲存失敗");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "儲存失敗"));
     } finally {
       setSaving(false);
     }

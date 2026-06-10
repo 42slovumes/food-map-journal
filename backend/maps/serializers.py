@@ -141,7 +141,9 @@ class MapSerializer(serializers.ModelSerializer):
         return obj.role_for(request.user) if request else None
 
     def get_collaborators_count(self, obj):
-        return obj.collaborators.count()
+        # 列表查詢已 prefetch_related('collaborators') → len() 走記憶體不再 N+1；
+        # 單一物件（如建立）未 prefetch 時 all() 會即時查詢一次。
+        return len(obj.collaborators.all())
 
 
 class CollaboratorSerializer(serializers.ModelSerializer):

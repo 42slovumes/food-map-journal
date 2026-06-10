@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { GoogleSignInButton, googleSignInEnabled } from "@/components/GoogleSignInButton";
 import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/components/ui/Toast";
+import { apiErrorMessage } from "@/lib/errors";
 import { useAuth } from "@/store/auth";
 
 const SAMPLE_CHIPS = ["🍜 拉麵", "☕ 咖啡廳", "🏞️ 想去景點", "❤️ 約會清單", "🍣 東京美食"];
@@ -22,8 +23,8 @@ export default function AuthPage() {
     try {
       await loginWithGoogle(credential);
       navigate("/");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Google 登入失敗");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Google 登入失敗"));
     }
   }
 
@@ -37,13 +38,8 @@ export default function AuthPage() {
         await register({ email, password, display_name: displayName });
       }
       navigate("/");
-    } catch (err: any) {
-      const data = err?.response?.data;
-      const msg =
-        data?.detail ||
-        (data && typeof data === "object" ? Object.values(data).flat()[0] : null) ||
-        "登入失敗，請確認帳號密碼";
-      toast.error(String(msg));
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "登入失敗，請確認帳號密碼"));
     } finally {
       setLoading(false);
     }

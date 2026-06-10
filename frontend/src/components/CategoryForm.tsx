@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/components/ui/Toast";
+import { apiErrorMessage } from "@/lib/errors";
 import { useData } from "@/store/data";
 import { useUI } from "@/store/ui";
 import type { Category } from "@/types";
@@ -66,8 +67,8 @@ export function CategoryForm({ open, onClose, initial }: Props) {
         toast.success("已新增分類");
       }
       onClose();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "儲存失敗");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "儲存失敗"));
     } finally {
       setSaving(false);
     }

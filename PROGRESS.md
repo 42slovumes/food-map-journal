@@ -213,6 +213,24 @@ food-map-journal/
 
 **最終回歸**：本機 SpatiaLite 與容器 PostGIS 各 **32 測試全過**；前端建置零錯誤；全面 e2e（登入/載入/近我空間/即時/分享/公開/推薦）全通；被移除成員流程 e2e 通過。
 
+## 效能/寫法審查與優化（本輪）
+
+多代理效能審查（5 面向 × 對抗式驗證，44 agents）→ 14 個建議，分流如下。
+
+**已套用（高價值、低風險）：**
+- **MapViewSet 列表 N+1**（最高價值）：`select_related('owner')` + `prefetch_related('collaborators')`；`role_for` 改記憶體查找；`collaborators_count` 改用 prefetch 的 `len()`（避免 annotate 與 filter join 衝突算錯）。新增 `test_map_list_no_n_plus_1`：7 地圖×2 共編者，列表查詢數 **≤8（常數級，原本約 25+）**。
+- 移除 3 個多餘的 `get_serializer_context()` 覆寫（DRF 預設已含 request）。
+- `CollaboratorViewSet.get_map()` 每 request 快取 + prefetch collaborators（create/權限檢查不再重複查詢）。
+- `PublicMapView` 用序列化結果的 `len()` 取代額外兩次 `COUNT`，並 `select_related('owner')`。
+- 前端：新增型別安全的 `apiErrorMessage()`，取代各表單的 `err: any` 取值。
+
+**評估後不改（誤報/刻意取捨）：**
+- 「缺索引」(#8/#13/#14)：Django 對 ForeignKey 與 unique_together **自動建索引**（已查 DB 確認 owner_id/map_id/user_id 與 (map_id,user_id) 索引皆存在）。
+- nearby 用 Python haversine 排序 (#6)：為 PostGIS/SpatiaLite **跨 DB 相容**的刻意取捨（geography 在 SpatiaLite 不支援；dwithin 已走空間索引預篩）。
+- 前端效能面向：審查後**無確認需優化項**（MVP 規模下程式碼已合理，不需 code-split 等）。
+
+**驗證**：後端 **33 測試全過**（含新 N+1 回歸）；前端建置零錯誤；全面 e2e 回歸全通；受影響端點（maps 計數/角色、/me、共編、public）live 確認正確。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。
