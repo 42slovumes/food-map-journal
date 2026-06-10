@@ -1,12 +1,23 @@
 import math
 
-from django.db.models import Count
-from rest_framework import viewsets
-from rest_framework.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
+from rest_framework import status, viewsets
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
 
-from .models import Category, Map, Place
-from .permissions import IsOwner
-from .serializers import CategorySerializer, MapSerializer, PlaceSerializer
+from .events import broadcast_event
+from .models import ROLE_EDITOR, ROLE_VIEWER, Category, Collaborator, Map, Place
+from .permissions import MapAccessPermission
+from .serializers import (
+    CategorySerializer,
+    CollaboratorSerializer,
+    MapSerializer,
+    PlaceSerializer,
+)
+
+User = get_user_model()
 
 EARTH_RADIUS_KM = 6371.0
 
@@ -22,17 +33,22 @@ def haversine_km(lat1, lon1, lat2, lon2) -> float:
 
 class MapViewSet(viewsets.ModelViewSet):
     serializer_class = MapSerializer
-    permission_classes = [IsOwner]
+    permission_classes = [MapAccessPermission]
 
     def get_queryset(self):
+        user = self.request.user
         return (
-            Map.objects.filter(owner=self.request.user)
+            Map.objects.filter(Q(owner=user) | Q(collaborators__user=user))
             .annotate(
                 categories_count=Count("categories", distinct=True),
                 places_count=Count("categories__places", distinct=True),
             )
+            .distinct()
             .order_by("-updated_at")
         )
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "request": self.request}
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -40,43 +56,65 @@ class MapViewSet(viewsets.ModelViewSet):
 
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
-    permission_classes = [IsOwner]
+    permission_classes = [MapAccessPermission]
     filterset_fields = ["map", "is_public", "is_collaborative"]
     search_fields = ["name", "description"]
     ordering_fields = ["sort_order", "created_at", "updated_at", "name"]
 
     def get_queryset(self):
+        user = self.request.user
         return (
-            Category.objects.filter(map__owner=self.request.user)
+            Category.objects.filter(
+                Q(map__owner=user) | Q(map__collaborators__user=user)
+            )
             .annotate(places_count=Count("places", distinct=True))
+            .distinct()
             .order_by("sort_order", "id")
         )
 
     def perform_create(self, serializer):
         map_obj = serializer.validated_data.get("map")
-        if map_obj is None or map_obj.owner != self.request.user:
-            raise ValidationError({"map": "找不到地圖或非本人擁有。"})
-        serializer.save(owner=self.request.user)
+        if map_obj is None or not map_obj.can_edit(self.request.user):
+            raise PermissionDenied("沒有在這張地圖新增分類的權限。")
+        cat = serializer.save(owner=self.request.user)
+        broadcast_event(
+            cat.map_id, "category.created", {"category": serializer.data}, actor=self.request.user
+        )
+
+    def perform_update(self, serializer):
+        # 防 IDOR：若要改 map（搬移分類），目標地圖也必須可編輯
+        target_map = serializer.validated_data.get("map")
+        if target_map is not None and not target_map.can_edit(self.request.user):
+            raise PermissionDenied("沒有把分類移到該地圖的權限。")
+        cat = serializer.save()
+        broadcast_event(
+            cat.map_id, "category.updated", {"category": serializer.data}, actor=self.request.user
+        )
+
+    def perform_destroy(self, instance):
+        map_id, cid = instance.map_id, instance.id
+        instance.delete()
+        broadcast_event(map_id, "category.deleted", {"id": cid}, actor=self.request.user)
 
 
 class PlaceViewSet(viewsets.ModelViewSet):
     serializer_class = PlaceSerializer
-    permission_classes = [IsOwner]
+    permission_classes = [MapAccessPermission]
     filterset_fields = ["category", "status"]
     search_fields = ["name", "address", "note"]
     ordering_fields = ["created_at", "updated_at", "rating", "name"]
 
     def get_queryset(self):
-        qs = Place.objects.filter(category__map__owner=self.request.user).select_related(
-            "category", "category__map", "created_by"
-        )
+        user = self.request.user
+        qs = Place.objects.filter(
+            Q(category__map__owner=user) | Q(category__map__collaborators__user=user)
+        ).select_related("category", "category__map", "created_by").distinct()
         map_id = self.request.query_params.get("map")
         if map_id:
             qs = qs.filter(category__map_id=map_id)
         return qs
 
     def filter_queryset(self, queryset):
-        # 先套用標準 filter/search/ordering，再做附近搜尋（會覆蓋排序，依距離由近到遠）
         queryset = super().filter_queryset(queryset)
         return self._apply_nearby(queryset)
 
@@ -91,11 +129,10 @@ class PlaceViewSet(viewsets.ModelViewSet):
         except ValueError:
             raise ValidationError({"lat/lng": "必須是數字。"})
         try:
-            radius = float(params.get("radius", 5))  # 預設 5 公里
+            radius = float(params.get("radius", 5))
         except ValueError:
             raise ValidationError({"radius": "必須是數字。"})
 
-        # bounding box 粗篩（避免對全表做 haversine）
         lat_delta = radius / 111.0
         lng_delta = radius / (111.0 * max(math.cos(math.radians(lat)), 0.01))
         qs = qs.filter(
@@ -118,9 +155,108 @@ class PlaceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         category = serializer.validated_data.get("category")
-        if category is None or category.map.owner != self.request.user:
-            raise ValidationError({"category": "找不到分類或非本人擁有。"})
-        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        if category is None or not category.map.can_edit(self.request.user):
+            raise PermissionDenied("沒有在這張地圖新增地點的權限。")
+        place = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        broadcast_event(
+            place.category.map_id, "place.created", {"place": serializer.data}, actor=self.request.user
+        )
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        # 防 IDOR：若要改 category（搬移地點），目標分類所屬地圖也必須可編輯
+        target_category = serializer.validated_data.get("category")
+        if target_category is not None and not target_category.map.can_edit(self.request.user):
+            raise PermissionDenied("沒有把地點移到該地圖的權限。")
+        place = serializer.save(updated_by=self.request.user)
+        broadcast_event(
+            place.category.map_id, "place.updated", {"place": serializer.data}, actor=self.request.user
+        )
+
+    def perform_destroy(self, instance):
+        map_id, pid = instance.category.map_id, instance.id
+        instance.delete()
+        broadcast_event(map_id, "place.deleted", {"id": pid}, actor=self.request.user)
+
+
+class CollaboratorViewSet(viewsets.ModelViewSet):
+    """地圖共編者管理：列出、以 email 邀請、改角色、移除。
+
+    巢狀於 /maps/{map_pk}/collaborators/。
+    讀取需為成員；新增/改/刪需 owner（但成員可移除自己＝退出）。
+    """
+
+    serializer_class = CollaboratorSerializer
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "request": self.request}
+
+    def get_map(self) -> Map:
+        m = get_object_or_404(Map, pk=self.kwargs["map_pk"])
+        if not m.can_view(self.request.user):
+            raise PermissionDenied("沒有存取這張地圖的權限。")
+        return m
+
+    def get_queryset(self):
+        return self.get_map().collaborators.select_related("user", "invited_by").order_by(
+            "created_at"
+        )
+
+    def _require_owner(self):
+        if not self.get_map().can_manage(self.request.user):
+            raise PermissionDenied("只有地圖擁有者可以管理成員。")
+
+    def create(self, request, *args, **kwargs):
+        self._require_owner()
+        m = self.get_map()
+        email = (request.data.get("email") or "").strip().lower()
+        role = request.data.get("role", ROLE_EDITOR)
+        if role not in (ROLE_EDITOR, ROLE_VIEWER):
+            role = ROLE_EDITOR
+        if not email:
+            raise ValidationError({"email": "請輸入要邀請的 email。"})
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            raise ValidationError({"email": "查無此使用者，請對方先註冊帳號。"})
+        if user.id == m.owner_id:
+            raise ValidationError({"email": "此使用者是地圖擁有者，不需邀請。"})
+
+        collab, created = Collaborator.objects.get_or_create(
+            map=m, user=user, defaults={"role": role, "invited_by": request.user}
+        )
+        if not created and collab.role != role:
+            collab.role = role
+            collab.save()
+
+        data = self.get_serializer(collab).data
+        broadcast_event(
+            m.id,
+            "collaborator.added" if created else "permission.updated",
+            {"collaborator": data},
+            actor=request.user,
+        )
+        return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_owner()
+        collab = self.get_object()
+        role = request.data.get("role")
+        if role in (ROLE_EDITOR, ROLE_VIEWER):
+            collab.role = role
+            collab.save()
+        data = self.get_serializer(collab).data
+        broadcast_event(
+            collab.map_id, "permission.updated", {"collaborator": data}, actor=request.user
+        )
+        return Response(data)
+
+    def destroy(self, request, *args, **kwargs):
+        collab = self.get_object()
+        # 成員可移除自己（退出地圖）；否則需 owner
+        if collab.user_id != request.user.id:
+            self._require_owner()
+        map_id, user_id = collab.map_id, collab.user_id
+        collab.delete()
+        broadcast_event(
+            map_id, "collaborator.removed", {"user_id": user_id}, actor=request.user
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

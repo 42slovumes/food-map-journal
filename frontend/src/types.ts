@@ -8,6 +8,8 @@ export interface User {
   avatar_image?: string | null;
 }
 
+export type Role = "owner" | "editor" | "viewer";
+
 export interface MapBoard {
   id: number;
   name: string;
@@ -16,8 +18,23 @@ export interface MapBoard {
   is_public: boolean;
   categories_count: number;
   places_count: number;
+  collaborators_count: number;
+  my_role: Role | null;
+  owner: number;
+  owner_name: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Collaborator {
+  id: number;
+  user_id: number;
+  email: string;
+  display_name: string;
+  avatar: string | null;
+  role: Exclude<Role, "owner">;
+  invited_by_name: string | null;
+  created_at: string;
 }
 
 export interface Category {

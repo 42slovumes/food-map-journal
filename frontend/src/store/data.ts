@@ -2,13 +2,14 @@ import { create } from "zustand";
 
 import {
   categoriesApi,
+  collaboratorsApi,
   mapsApi,
   metaApi,
   type PlaceQuery,
   placesApi,
 } from "@/lib/api";
 import type { LatLng } from "@/map/types";
-import type { Category, MapBoard, Place, Presets } from "@/types";
+import type { Category, Collaborator, MapBoard, Place, Presets, Role } from "@/types";
 
 interface DataState {
   maps: MapBoard[];
@@ -17,6 +18,7 @@ interface DataState {
   activeCategoryId: number | null; // null = 全部分類
   places: Place[];
   presets: Presets | null;
+  members: Collaborator[];
 
   selectedPlaceId: number | null;
   search: string;
@@ -51,6 +53,21 @@ interface DataState {
   createPlace: (payload: Partial<Place>) => Promise<Place>;
   updatePlace: (id: number, payload: Partial<Place>) => Promise<Place>;
   deletePlace: (id: number) => Promise<void>;
+
+  // 共編成員
+  loadMembers: () => Promise<void>;
+  inviteCollaborator: (email: string, role: Exclude<Role, "owner">) => Promise<Collaborator>;
+  updateCollaboratorRole: (id: number, role: Exclude<Role, "owner">) => Promise<void>;
+  removeCollaborator: (id: number) => Promise<void>;
+
+  // 我在目前地圖的角色
+  myRole: () => Role | null;
+  // 套用 WebSocket 即時事件
+  applyEvent: (
+    event: string,
+    payload: any,
+    actor: { id: number; display_name: string } | null,
+  ) => Promise<void>;
 }
 
 export const useData = create<DataState>((set, get) => ({
@@ -60,6 +77,7 @@ export const useData = create<DataState>((set, get) => ({
   activeCategoryId: null,
   places: [],
   presets: null,
+  members: [],
 
   selectedPlaceId: null,
   search: "",
@@ -229,6 +247,84 @@ export const useData = create<DataState>((set, get) => ({
     }));
     await refreshCategoryCounts(set, get);
   },
+
+  // ---- 共編成員 ----
+  async loadMembers() {
+    const mapId = get().activeMapId;
+    if (!mapId) return;
+    const members = await collaboratorsApi.list(mapId);
+    set({ members });
+  },
+  async inviteCollaborator(email, role) {
+    const mapId = get().activeMapId!;
+    const collab = await collaboratorsApi.invite(mapId, email, role);
+    await get().loadMembers();
+    await reloadMaps(set, get);
+    return collab;
+  },
+  async updateCollaboratorRole(id, role) {
+    const mapId = get().activeMapId!;
+    await collaboratorsApi.updateRole(mapId, id, role);
+    await get().loadMembers();
+  },
+  async removeCollaborator(id) {
+    const mapId = get().activeMapId!;
+    await collaboratorsApi.remove(mapId, id);
+    await get().loadMembers();
+    await reloadMaps(set, get);
+  },
+
+  myRole() {
+    const { maps, activeMapId } = get();
+    return maps.find((m) => m.id === activeMapId)?.my_role ?? null;
+  },
+
+  // ---- 套用 WebSocket 即時事件 ----
+  async applyEvent(event, payload, _actor) {
+    const state = get();
+    const mapId = state.activeMapId;
+
+    const matchesFilter = (p: Place) => {
+      if (state.activeCategoryId !== null && p.category !== state.activeCategoryId) return false;
+      if (state.statusFilter && p.status !== state.statusFilter) return false;
+      return true;
+    };
+
+    if (event === "place.created" || event === "place.updated") {
+      const p: Place = payload.place;
+      if (p.map !== mapId) return;
+      set((s) => {
+        const exists = s.places.some((x) => x.id === p.id);
+        if (exists) return { places: s.places.map((x) => (x.id === p.id ? p : x)) };
+        if (matchesFilter(p)) return { places: [p, ...s.places] };
+        return {};
+      });
+      await refreshCategoryCounts(set, get);
+    } else if (event === "place.deleted") {
+      const id = payload.id;
+      set((s) => ({
+        places: s.places.filter((x) => x.id !== id),
+        selectedPlaceId: s.selectedPlaceId === id ? null : s.selectedPlaceId,
+      }));
+      await refreshCategoryCounts(set, get);
+    } else if (event.startsWith("category.")) {
+      // 分類異動：重載分類；若刪除則一併移除其地點
+      if (event === "category.deleted") {
+        const id = payload.id;
+        set((s) => ({
+          places: s.places.filter((p) => p.category !== id),
+          activeCategoryId: s.activeCategoryId === id ? null : s.activeCategoryId,
+        }));
+      }
+      if (mapId) {
+        const categories = await categoriesApi.list(mapId);
+        set({ categories });
+      }
+    } else if (event.startsWith("collaborator.") || event === "permission.updated") {
+      await get().loadMembers();
+      await reloadMaps(set, get);
+    }
+  },
 }));
 
 // 地點變動後重新抓分類（更新 places_count 徽章）
@@ -240,4 +336,14 @@ async function refreshCategoryCounts(
   if (!mapId) return;
   const categories = await categoriesApi.list(mapId);
   set({ categories });
+}
+
+// 成員/權限變動後重抓地圖清單（更新 my_role、collaborators_count）
+async function reloadMaps(
+  set: (partial: Partial<DataState>) => void,
+  get: () => DataState,
+) {
+  const maps = await mapsApi.list();
+  set({ maps });
+  void get;
 }

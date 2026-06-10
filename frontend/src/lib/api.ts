@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from "axios";
 
 import type {
   Category,
+  Collaborator,
   MapBoard,
   Paginated,
   Place,
@@ -11,6 +12,12 @@ import type {
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
+
+/** 由 API base 推導 WebSocket base：http(s)://host/api/v1 → ws(s)://host/ws */
+export function wsBaseUrl(): string {
+  const origin = BASE_URL.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
+  return origin.replace(/^http/, "ws") + "/ws";
+}
 
 const ACCESS_KEY = "fmj_access";
 const REFRESH_KEY = "fmj_refresh";
@@ -188,5 +195,31 @@ export const metaApi = {
   async presets() {
     const { data } = await api.get<Presets>("/meta/presets/");
     return data;
+  },
+};
+
+export const collaboratorsApi = {
+  async list(mapId: number) {
+    const { data } = await api.get<Collaborator[] | Paginated<Collaborator>>(
+      `/maps/${mapId}/collaborators/`,
+    );
+    return unwrap(data);
+  },
+  async invite(mapId: number, email: string, role: "editor" | "viewer") {
+    const { data } = await api.post<Collaborator>(`/maps/${mapId}/collaborators/`, {
+      email,
+      role,
+    });
+    return data;
+  },
+  async updateRole(mapId: number, id: number, role: "editor" | "viewer") {
+    const { data } = await api.patch<Collaborator>(
+      `/maps/${mapId}/collaborators/${id}/`,
+      { role },
+    );
+    return data;
+  },
+  async remove(mapId: number, id: number) {
+    await api.delete(`/maps/${mapId}/collaborators/${id}/`);
   },
 };

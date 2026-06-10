@@ -48,7 +48,8 @@ LOCAL_APPS = [
     "maps",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+# daphne 需放在最前面，讓 runserver 以 ASGI 模式啟動（支援 WebSocket）
+INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + ["channels"] + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -163,8 +164,19 @@ CORS_ALLOWED_ORIGINS = env_list(
 )
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
-# ---- Redis（預留給未來 Channels 即時同步） ----
+# ---- Redis / Channels（即時同步） ----
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+# CHANNEL_LAYER=redis 用 Redis（多程序/正式環境）；否則用 InMemory（本機單程序開發足夠）
+if os.environ.get("CHANNEL_LAYER") == "redis":
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+    }
+else:
+    CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 # ---- Google 第三方登入 ----
 # Web 應用程式的 OAuth Client ID；留空則停用 Google 登入（前端按鈕會隱藏）。

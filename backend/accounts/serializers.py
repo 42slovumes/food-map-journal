@@ -28,6 +28,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "email", "display_name", "password"]
+        # username 非必填：未提供時於 create() 以 email 前綴自動產生
+        extra_kwargs = {"username": {"required": False}}
 
     def validate_email(self, value):
         # 一律正規化成小寫，避免大小寫造成重複帳號或誤配

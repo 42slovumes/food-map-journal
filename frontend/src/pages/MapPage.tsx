@@ -8,6 +8,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Users,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -16,6 +17,7 @@ import { CategoryChips } from "@/components/CategoryChips";
 import { CategoryForm } from "@/components/CategoryForm";
 import { MapForm } from "@/components/MapForm";
 import { MapSwitcher } from "@/components/MapSwitcher";
+import { MembersDialog } from "@/components/MembersDialog";
 import { PlaceDetail } from "@/components/PlaceDetail";
 import { PlaceForm } from "@/components/PlaceForm";
 import { PlaceList } from "@/components/PlaceList";
@@ -26,6 +28,7 @@ import { useIsDesktop } from "@/hooks/useMediaQuery";
 import MapView from "@/map/MapView";
 import type { LatLng, MapMarkerData } from "@/map/types";
 import { useData } from "@/store/data";
+import { useRealtime } from "@/store/realtime";
 import { useUI } from "@/store/ui";
 import type { Place, ViewMode } from "@/types";
 
@@ -54,11 +57,18 @@ export default function MapPage() {
   const setViewMode = useUI((s) => s.setViewMode);
   const advanced = useUI((s) => s.advancedMode);
 
+  // 共編：我的角色與線上狀態
+  const myRole = useData((s) => s.maps.find((m) => m.id === s.activeMapId)?.my_role ?? null);
+  const canEdit = myRole !== "viewer"; // owner/editor/載入中 → 可編輯；viewer → 唯讀
+  const online = useRealtime((s) => s.online);
+  const rtStatus = useRealtime((s) => s.status);
+
   const [placeFormOpen, setPlaceFormOpen] = useState(false);
   const [editingPlace, setEditingPlace] = useState<Place | null>(null);
   const [newCoords, setNewCoords] = useState<LatLng | null>(null);
   const [catFormOpen, setCatFormOpen] = useState(false);
   const [mapFormOpen, setMapFormOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Place | null>(null);
 
   const selectedPlace = useMemo(
@@ -138,7 +148,7 @@ export default function MapPage() {
       center={focusCenter}
       userLocation={nearby ? userLocation : null}
       onMarkerClick={handleSelect}
-      onMapClick={(c) => openAdd(c)}
+      onMapClick={canEdit ? (c) => openAdd(c) : undefined}
       className="h-full w-full"
     />
   );
@@ -162,6 +172,7 @@ export default function MapPage() {
         <div className="no-scrollbar flex-1 overflow-y-auto pr-1">
           <PlaceDetail
             place={selectedPlace}
+            canEdit={canEdit}
             onEdit={() => openEdit(selectedPlace)}
             onDelete={() => setDeleteTarget(selectedPlace)}
           />
@@ -175,7 +186,7 @@ export default function MapPage() {
             selectedId={selectedPlaceId}
             loading={loadingPlaces}
             onSelect={handleSelect}
-            onAdd={() => openAdd()}
+            onAdd={canEdit ? () => openAdd() : undefined}
             emptyHint={nearby ? "附近沒有已收藏的地點，試著擴大範圍" : undefined}
           />
         </div>
@@ -219,6 +230,18 @@ export default function MapPage() {
           )}
 
           <ViewToggle isDesktop={isDesktop} value={viewMode} onChange={setViewMode} />
+
+          <button
+            onClick={() => setMembersOpen(true)}
+            className="btn-outline relative shrink-0 px-3 py-2 text-sm"
+            title="成員與共編"
+          >
+            <Users size={16} />
+            <span className="hidden tnum sm:inline">{online.length || ""}</span>
+            {rtStatus === "open" && (
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-emerald-500" />
+            )}
+          </button>
         </div>
 
         {/* 手機搜尋列 */}
@@ -233,7 +256,7 @@ export default function MapPage() {
         </div>
 
         <div className="mt-2">
-          <CategoryChips onAddCategory={() => setCatFormOpen(true)} />
+          <CategoryChips onAddCategory={canEdit ? () => setCatFormOpen(true) : undefined} />
         </div>
       </header>
 
@@ -254,21 +277,25 @@ export default function MapPage() {
         {showMap && (
           <div className={`relative min-h-0 flex-1 ${showPanel ? "hidden md:block" : "block"}`}>
             {mapEl}
-            {/* 點地圖新增提示（桌機） */}
-            <div className="pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 rounded-full bg-ink/75 px-3 py-1.5 text-xs font-medium text-white md:block">
-              點地圖空白處可在該位置新增地點
-            </div>
+            {/* 點地圖新增提示（桌機，僅可編輯者） */}
+            {canEdit && (
+              <div className="pointer-events-none absolute left-1/2 top-3 hidden -translate-x-1/2 rounded-full bg-ink/75 px-3 py-1.5 text-xs font-medium text-white md:block">
+                點地圖空白處可在該位置新增地點
+              </div>
+            )}
           </div>
         )}
 
-        {/* FAB 新增 */}
-        <button
-          onClick={() => openAdd()}
-          className="absolute bottom-20 right-4 z-20 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-white shadow-lift transition active:scale-95 md:bottom-6 md:right-6"
-          aria-label="新增地點"
-        >
-          <Plus size={26} />
-        </button>
+        {/* FAB 新增（viewer 隱藏） */}
+        {canEdit && (
+          <button
+            onClick={() => openAdd()}
+            className="absolute bottom-20 right-4 z-20 grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-white shadow-lift transition active:scale-95 md:bottom-6 md:right-6"
+            aria-label="新增地點"
+          >
+            <Plus size={26} />
+          </button>
+        )}
       </div>
 
       {/* 手機詳情 sheet */}
@@ -280,6 +307,7 @@ export default function MapPage() {
         {selectedPlace && (
           <PlaceDetail
             place={selectedPlace}
+            canEdit={canEdit}
             onEdit={() => openEdit(selectedPlace)}
             onDelete={() => setDeleteTarget(selectedPlace)}
           />
@@ -294,6 +322,7 @@ export default function MapPage() {
       />
       <CategoryForm open={catFormOpen} onClose={() => setCatFormOpen(false)} />
       <MapForm open={mapFormOpen} onClose={() => setMapFormOpen(false)} />
+      <MembersDialog open={membersOpen} onClose={() => setMembersOpen(false)} />
       <ConfirmDialog
         open={!!deleteTarget}
         title="刪除這個地點？"

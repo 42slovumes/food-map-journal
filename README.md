@@ -18,6 +18,7 @@
 - **附近搜尋**：依目前位置，列出附近已收藏的地點並按距離排序。
 - **Google Maps 高度整合**：每個地點自動產生 Google Maps 連結，一鍵開啟導航。
 - **探索推薦（第一階段，規則式）**：高評價 / 想去清單 / 附近順路。
+- **共編協作 + 即時同步（第二階段）**：以 email 邀請成員、權限分 Owner/Editor/Viewer；透過 WebSocket（Django Channels + Redis）即時同步地點/分類新增・修改・刪除與成員/權限變更；線上成員指示、他人動作提示、斷線自動重連；Viewer 介面唯讀。
 - **進階模式開關**：把高密度欄位與篩選收進設定，預設保持清爽。
 - **雙模式地圖**：有 `VITE_GOOGLE_MAPS_API_KEY` 用 Google Maps；沒有則自動降級 Leaflet + OpenStreetMap。
 - **三環境設定**：development / staging / production。
@@ -32,8 +33,9 @@
 | 層 | 技術 |
 |----|------|
 | 前端 | React + Vite + TypeScript、React Router、Zustand、Tailwind CSS、Framer Motion、地圖抽象層（Google Maps JS API / react-leaflet） |
-| 後端 | Django 5 + Django REST Framework、SimpleJWT、django-filter、uv 管理 |
+| 後端 | Django 5 + Django REST Framework、SimpleJWT、django-filter、**Channels + channels-redis + Daphne（WebSocket 即時同步）**、uv 管理 |
 | 資料庫 | PostgreSQL（Docker）／本機可降級 SQLite |
+| 即時 | WebSocket（Django Channels），Redis 作 channel layer（本機可降級 InMemory） |
 | 基礎設施 | Docker Compose（db / redis / backend / frontend） |
 
 ---
@@ -92,6 +94,7 @@ pnpm dev
 | `GOOGLE_OAUTH_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Google 登入用的同一組 Web Client ID（前後端皆需）；留空則不啟用 Google 登入 |
 | `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api/v1`） |
 | `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SQLite |
+| `CHANNEL_LAYER` | 即時同步 channel layer：`redis`（Docker/正式）或留空＝InMemory（本機單程序） |
 | `DJANGO_ENV` | `development` / `staging` / `production` |
 
 ### 啟用 Google 登入（選用）
@@ -147,7 +150,10 @@ food-map-journal/
 | CRUD | `/api/v1/maps/` · `/api/v1/categories/` · `/api/v1/places/` | 地圖 / 分類 / 地點 |
 | GET | `/api/v1/places/?category=&status=&search=&map=` | 篩選 |
 | GET | `/api/v1/places/?lat=&lng=&radius=` | 附近搜尋（回傳 `distance_km`，依距離排序） |
+| GET/POST | `/api/v1/maps/{id}/collaborators/` | 列出 / 以 email 邀請共編者（owner） |
+| PATCH/DELETE | `/api/v1/maps/{id}/collaborators/{cid}/` | 改角色 / 移除（owner）或成員自行退出 |
 | GET | `/api/v1/meta/presets/` | 狀態 / 顏色 / 標籤 / 圖示建議 |
+| WS | `ws://<host>/ws/maps/{id}/?token=<access>` | 即時同步：成員連線後接收 place/category/collaborator 等事件與上線狀態 |
 
 > 健康檢查範例：`curl http://localhost:8080/healthz/` →
 > `{"status":"ok","version":"0.2.0","released":"2026-06-10","commit":"","environment":"development","time":"..."}`
@@ -157,5 +163,6 @@ food-map-journal/
 
 ## 🗺️ Roadmap
 
-- **第二階段**：共編協作 + Django Channels + Redis + WebSocket 即時同步、權限管理。
-- **第三階段**：地圖/清單圖片產出與社群分享、智慧推薦進階版、PostGIS 地理查詢優化。
+- ~~**第一階段**：穩固可運行 MVP。~~ ✅ 完成
+- ~~**第二階段**：共編協作 + Django Channels + Redis + WebSocket 即時同步、權限管理。~~ ✅ 完成
+- **第三階段**：地圖/清單圖片產出與社群分享、智慧推薦進階版、PostGIS 地理查詢優化、持久化操作紀錄。

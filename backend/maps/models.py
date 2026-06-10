@@ -28,6 +28,12 @@ DEFAULT_CATEGORY_COLORS = [
 ]
 
 
+# 共編角色
+ROLE_OWNER = "owner"
+ROLE_EDITOR = "editor"
+ROLE_VIEWER = "viewer"
+
+
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField("建立時間", auto_now_add=True)
     updated_at = models.DateTimeField("更新時間", auto_now=True)
@@ -57,6 +63,25 @@ class Map(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    # ---- 共編權限 ----
+    def role_for(self, user) -> str | None:
+        """回傳使用者對這張地圖的角色：owner / editor / viewer / None。"""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return None
+        if self.owner_id == user.id:
+            return ROLE_OWNER
+        collab = self.collaborators.filter(user=user).first()
+        return collab.role if collab else None
+
+    def can_view(self, user) -> bool:
+        return self.role_for(user) is not None
+
+    def can_edit(self, user) -> bool:
+        return self.role_for(user) in (ROLE_OWNER, ROLE_EDITOR)
+
+    def can_manage(self, user) -> bool:
+        return self.role_for(user) == ROLE_OWNER
 
 
 class Category(TimeStampedModel):
@@ -164,3 +189,40 @@ class Place(TimeStampedModel):
     def save(self, *args, **kwargs):
         self.google_maps_url = self.ensure_google_maps_url()
         super().save(*args, **kwargs)
+
+
+class Collaborator(TimeStampedModel):
+    """地圖共編者（owner 不在此表，由 Map.owner 表示）。"""
+
+    ROLE_CHOICES = [
+        (ROLE_EDITOR, "編輯者"),
+        (ROLE_VIEWER, "檢視者"),
+    ]
+
+    map = models.ForeignKey(
+        Map, on_delete=models.CASCADE, related_name="collaborators", verbose_name="地圖"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="collaborations",
+        verbose_name="共編者",
+    )
+    role = models.CharField("角色", max_length=16, choices=ROLE_CHOICES, default=ROLE_EDITOR)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_invites",
+        verbose_name="邀請者",
+    )
+
+    class Meta:
+        verbose_name = "共編者"
+        verbose_name_plural = "共編者"
+        unique_together = ("map", "user")
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user} @ {self.map} ({self.role})"

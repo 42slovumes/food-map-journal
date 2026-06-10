@@ -84,6 +84,26 @@ def test_missing_sub_rejected(mock_verify, client):
 
 
 @pytest.mark.django_db
+def test_register_without_username(client):
+    # app 註冊只送 email/password/display_name，username 應自動產生
+    r = client.post(
+        "/api/v1/auth/register/",
+        {"email": "newuser@example.com", "password": "pw-123456", "display_name": "新用戶"},
+        format="json",
+    )
+    assert r.status_code == 201, r.json()
+    u = User.objects.get(email="newuser@example.com")
+    assert u.username  # 已自動產生
+    # 接著能用 email/密碼登入
+    login = client.post(
+        "/api/v1/auth/login/",
+        {"email": "newuser@example.com", "password": "pw-123456"},
+        format="json",
+    )
+    assert login.status_code == 200
+
+
+@pytest.mark.django_db
 def test_logout_blacklists_refresh_token(client):
     User.objects.create_user(username="lo", email="lo@example.com", password="pw-123456")
     login = client.post(

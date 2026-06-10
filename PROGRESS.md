@@ -115,6 +115,42 @@ food-map-journal/
 - **前端打包嵌日期**：vite `define` 注入 `__APP_VERSION__`（package.json）與 `__BUILD_DATE__`（打包當日 YYYY-MM-DD），設定頁底顯示「v0.2.0 · build 2026-06-10」。版本升至 0.2.0。
 - **附帶修正**：`seed_demo` 改為冪等（已有 demo 資料就略過，`--force` 可重建），避免每次重啟後端清掉使用者資料。
 
+## 第二階段：共編協作 + 即時同步（完成）
+
+**後端**
+- `Collaborator(map, user, role)` 模型 + migration；Map 角色判斷 `role_for/can_view/can_edit/can_manage`（owner/editor/viewer）。
+- Map/Category/Place queryset 擴及共編地圖；`MapAccessPermission`：viewer 唯讀、editor 可寫地點/分類、owner 管理地圖與成員。
+- 共編者 API `/maps/{id}/collaborators/`：列出、以 email 邀請、改角色、移除；owner 限定，成員可自行退出。
+- Channels + channels-redis + Daphne；`config/asgi.py` ProtocolTypeRouter；`JWTAuthMiddleware`（?token= 驗證）；`MapConsumer` 依地圖分 group、驗權、presence；`CHANNEL_LAYER=redis`（Docker）/InMemory（本機）。
+- REST 寫入後 `broadcast_event` 推播 place/category/collaborator/permission 事件給同地圖 group。
+
+**前端**
+- `wsBaseUrl()` 由 API base 推導；`store/realtime.ts` 管理 WS 連線、presence、重連（指數退避）、事件分派與他人動作 toast。
+- `store/data.ts` `applyEvent` 即時 upsert/移除地點、刷新分類/成員/地圖；成員 CRUD。
+- AppLayout 跟隨 activeMap 連線、登出斷線；`MembersDialog` 成員管理（邀請/角色/移除/退出、線上指示）。
+- 權限感知：viewer 隱藏 FAB/新增/編輯/刪除/點圖新增；工具列成員按鈕含線上數與連線綠點。
+
+**驗證**
+- 後端測試 21 個全過（11 共編權限 + 10 認證，含新「註冊免帶 username」回歸）。
+- WebSocket live 測試：無 token 被拒、成員連線、place.created/updated/deleted 即時推播。
+- 真實瀏覽器兩分頁：A 改 → B 不重整即見/即移除。
+- 真實瀏覽器跨使用者：邀請 editor → 看到共享地點與 FAB → demo 新增 collab2 即時看到 → 降為 viewer 後 FAB 即時消失。
+- **附帶修正**：發現並修掉「用 app 註冊（不帶 username）會 400」的 MVP 既有 bug（serializer username 改非必填）。
+
+**設計取捨/未做**：持久化操作紀錄(activity_logs) 與「邀請連結 token」留待後續（目前邀請＝加既有 email 使用者）；presence 在連線期間累積（晚加入者看不到先前已在線者，屬已知小限制）。
+
+### 共編安全審查（多代理對抗式，24 agents，19 個成立發現）
+
+**已修並驗證：**
+- **IDOR（critical）**：`perform_update` 未驗證目標地圖 → editor 可把地點/分類搬到無權限地圖。已在 PlaceViewSet/CategoryViewSet 的 `perform_update` 補目標 `can_edit` 驗證，加 2 個回歸測試（共 23 測試全過）。
+- **被移除成員 WS 仍收事件（critical）**：consumer 收到 `collaborator.removed`/`permission.updated` 後重檢角色，非成員即以 4403 斷線（live 驗證通過）。降為 viewer 不斷線（viewer 本就可讀）。
+
+**評估後不改（記錄理由）：**
+- 廣播前已是「授權寫入成功後」才觸發，actor 必已具權限（非問題）。
+- WS 用 ?token=、過期 token 連線存續、Redis/WSS TLS、WS 連線限流 → 屬**部署層強化**（正式環境用 wss + Redis TLS/密碼；可改短期 WS ticket），列後續。
+- 成員互看 email/建立者/操作者 → 協作工具設計常態（如 Google Docs 顯示協作者）。
+- map.deleted 廣播、角色查詢 N+1 → 後續優化。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。

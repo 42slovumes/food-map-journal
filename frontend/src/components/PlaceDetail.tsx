@@ -9,9 +9,10 @@ interface Props {
   place: Place;
   onEdit: () => void;
   onDelete: () => void;
+  canEdit?: boolean;
 }
 
-export function PlaceDetail({ place, onEdit, onDelete }: Props) {
+export function PlaceDetail({ place, onEdit, onDelete, canEdit = true }: Props) {
   const advanced = useUI((s) => s.advancedMode);
   const distance = formatDistance(place.distance_km);
 
@@ -107,19 +108,21 @@ export function PlaceDetail({ place, onEdit, onDelete }: Props) {
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <button onClick={onEdit} className="btn-outline flex-1 py-2.5">
-          <Pencil size={16} />
-          編輯
-        </button>
-        <button
-          onClick={onDelete}
-          className="btn border border-line bg-card px-4 py-2.5 text-rose-600 hover:border-rose-200 hover:bg-rose-50"
-          aria-label="刪除"
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex gap-2 pt-1">
+          <button onClick={onEdit} className="btn-outline flex-1 py-2.5">
+            <Pencil size={16} />
+            編輯
+          </button>
+          <button
+            onClick={onDelete}
+            className="btn border border-line bg-card px-4 py-2.5 text-rose-600 hover:border-rose-200 hover:bg-rose-50"
+            aria-label="刪除"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 import { LogOut, type LucideIcon, Map, Settings, Sparkles, SquareStack } from "lucide-react";
+import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/store/auth";
+import { useData } from "@/store/data";
+import { useRealtime } from "@/store/realtime";
 
 interface NavItem {
   to: string;
@@ -21,7 +24,20 @@ export function AppLayout() {
   const logout = useAuth((s) => s.logout);
   const navigate = useNavigate();
 
+  const activeMapId = useData((s) => s.activeMapId);
+  const connect = useRealtime((s) => s.connect);
+  const disconnect = useRealtime((s) => s.disconnect);
+
+  // 即時同步：跟隨目前地圖建立 WebSocket 連線（connect 內部會處理切換地圖）
+  useEffect(() => {
+    if (activeMapId) connect(activeMapId);
+  }, [activeMapId, connect]);
+
+  // 離開（登出）時斷線
+  useEffect(() => () => disconnect(), [disconnect]);
+
   function handleLogout() {
+    disconnect();
     logout();
     navigate("/login");
   }

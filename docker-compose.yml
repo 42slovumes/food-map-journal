@@ -44,6 +44,8 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
+      # 即時同步用 Redis channel layer（多程序/正式環境需要）
+      CHANNEL_LAYER: redis
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       # 版本資訊（選用，留空則用程式內預設）；CI/CD 可在部署時注入
       APP_VERSION: ${APP_VERSION:-}
