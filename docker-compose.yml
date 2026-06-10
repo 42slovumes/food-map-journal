@@ -1,0 +1,69 @@
+name: food-map-journal
+
+# 開發環境：postgres + redis + backend(Django) + frontend(Vite)
+# 啟動：  docker compose up --build
+# 前端：  http://localhost:5173   後端：http://localhost:8080/api
+# （host 埠選 8080/5173/5432/6379，避免與本機其他服務衝突）
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foodmap}
+      POSTGRES_USER: ${POSTGRES_USER:-foodmap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foodmap}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-foodmap}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_ENV: development
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-insecure-change-me}
+      DJANGO_DEBUG: "true"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      DJANGO_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      POSTGRES_DB: ${POSTGRES_DB:-foodmap}
+      POSTGRES_USER: ${POSTGRES_USER:-foodmap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foodmap}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8080:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    environment:
+      # 瀏覽器在 host 上執行，透過 host 對外埠連後端
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
+      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+      # macOS bind mount 不傳檔案事件，改用輪詢讓 Vite hot reload 生效
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:

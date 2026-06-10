@@ -1,0 +1,79 @@
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  avatar: string | null;
+}
+
+export interface MapBoard {
+  id: number;
+  name: string;
+  description: string;
+  emoji: string;
+  is_public: boolean;
+  categories_count: number;
+  places_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Category {
+  id: number;
+  map: number;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  is_public: boolean;
+  is_collaborative: boolean;
+  sort_order: number;
+  places_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Place {
+  id: number;
+  category: number;
+  category_name: string;
+  category_color: string;
+  category_icon: string;
+  map: number;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  google_maps_url: string;
+  google_place_id: string;
+  status: string;
+  rating: number | null;
+  recommend_level: number | null;
+  tags: string[];
+  note: string;
+  want_reason: string;
+  experience_note: string;
+  cover_photo: string | null;
+  created_by: number | null;
+  created_by_name: string | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+  distance_km: number | null;
+}
+
+export interface Presets {
+  statuses: string[];
+  colors: string[];
+  tags: string[];
+  icons: string[];
+}
+
+export interface Paginated<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+export type ViewMode = "split" | "map" | "list";

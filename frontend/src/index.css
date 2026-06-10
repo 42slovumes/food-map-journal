@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    /* 暖紙感：細微紋理 + 頂部柔光 */
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, rgba(242, 112, 26, 0.06), transparent 60%);
+    background-attachment: fixed;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+
+  /* 數字、距離用 display 字體更有個性 */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-medium
+      transition-all duration-200 active:scale-[0.97] disabled:opacity-50
+      disabled:pointer-events-none select-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white shadow-soft hover:bg-brand-600;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-soft hover:bg-black/[0.04] hover:text-ink;
+  }
+  .btn-outline {
+    @apply btn border border-line bg-card text-ink hover:border-brand-300 hover:text-brand-700;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-line bg-card px-4 py-3 text-ink
+      placeholder:text-ink-faint outline-none transition
+      focus:border-brand-400 focus:ring-4 focus:ring-brand-100;
+  }
+  .card {
+    @apply rounded-3xl border border-line bg-card shadow-soft;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm
+      font-medium transition select-none whitespace-nowrap;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: calc(0.5rem + var(--safe-bottom));
+  }
+}
+
+/* ---- Leaflet 客製：去掉預設外框、用我們的色系 ---- */
+.leaflet-container {
+  font-family: inherit;
+  background: #eef2f0;
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  border-color: #ece3d6;
+  color: #211c18;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem;
+  box-shadow: 0 18px 40px -16px rgba(33, 28, 24, 0.28);
+}
+.fmj-pin {
+  background: transparent;
+  border: none;
+}
