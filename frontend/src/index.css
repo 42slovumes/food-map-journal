@@ -81,6 +81,10 @@
 .leaflet-container {
   font-family: inherit;
   background: #eef2f0;
+  /* 建立獨立 stacking context，把 Leaflet 內部高 z-index（panes 400 / 控制項 1000）
+     關在地圖內，避免蓋過彈窗、清單、toast、底部導覽等 UI */
+  isolation: isolate;
+  z-index: 0;
 }
 .leaflet-bar a,
 .leaflet-bar a:hover {
