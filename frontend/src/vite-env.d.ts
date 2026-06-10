@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+// Vite define 注入的編譯期常數
+declare const __APP_VERSION__: string;
+declare const __BUILD_DATE__: string;
+
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;

@@ -48,7 +48,7 @@ docker compose up --build
 ```
 
 - 前端：<http://localhost:5173>
-- 後端 API：<http://localhost:8080/api>
+- 後端 API：<http://localhost:8080/api/v1>（健康檢查：<http://localhost:8080/healthz/>）
 - 啟動時會自動建立資料表並灌入示範資料。
 
 停止：`docker compose down`（保留資料）／`docker compose down -v`（連資料一起清除）。
@@ -90,7 +90,7 @@ pnpm dev
 |------|------|
 | `VITE_GOOGLE_MAPS_API_KEY` | 留空 → 自動用 OpenStreetMap；填入 → 切換成 Google Maps + Places |
 | `GOOGLE_OAUTH_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Google 登入用的同一組 Web Client ID（前後端皆需）；留空則不啟用 Google 登入 |
-| `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api`） |
+| `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api/v1`） |
 | `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SQLite |
 | `DJANGO_ENV` | `development` / `staging` / `production` |
 
@@ -134,15 +134,24 @@ food-map-journal/
 
 ## 🔌 API 一覽
 
+所有 API 統一掛在 **`/api/v1/`** 前綴下，方便日後擴展與版本演進。
+
 | 方法 | 路徑 | 說明 |
 |------|------|------|
-| POST | `/api/auth/register/` · `/api/auth/login/` · `/api/auth/refresh/` | 註冊 / 登入 / 換 token |
-| POST | `/api/auth/google/` | Google ID token 登入（驗證後換發 JWT） |
-| GET/PATCH | `/api/auth/me/` | 個人資料 |
-| CRUD | `/api/maps/` · `/api/categories/` · `/api/places/` | 地圖 / 分類 / 地點 |
-| GET | `/api/places/?category=&status=&search=&map=` | 篩選 |
-| GET | `/api/places/?lat=&lng=&radius=` | 附近搜尋（回傳 `distance_km`，依距離排序） |
-| GET | `/api/meta/presets/` | 狀態 / 顏色 / 標籤 / 圖示建議 |
+| GET | `/healthz/`（亦 `/api/v1/healthz/`） | 健康檢查：版本、發佈日期、commit、環境、時間（供 k8s/VM 探針與版更除錯） |
+| GET | `/api/v1/health/` | 輕量存活檢查（簡單 ok） |
+| POST | `/api/v1/auth/register/` · `/api/v1/auth/login/` · `/api/v1/auth/refresh/` | 註冊 / 登入 / 換 token |
+| POST | `/api/v1/auth/google/` | Google ID token 登入（驗證後換發 JWT） |
+| POST | `/api/v1/auth/logout/` | 登出（撤銷 refresh token） |
+| GET/PATCH | `/api/v1/auth/me/` | 個人資料 |
+| CRUD | `/api/v1/maps/` · `/api/v1/categories/` · `/api/v1/places/` | 地圖 / 分類 / 地點 |
+| GET | `/api/v1/places/?category=&status=&search=&map=` | 篩選 |
+| GET | `/api/v1/places/?lat=&lng=&radius=` | 附近搜尋（回傳 `distance_km`，依距離排序） |
+| GET | `/api/v1/meta/presets/` | 狀態 / 顏色 / 標籤 / 圖示建議 |
+
+> 健康檢查範例：`curl http://localhost:8080/healthz/` →
+> `{"status":"ok","version":"0.2.0","released":"2026-06-10","commit":"","environment":"development","time":"..."}`
+> 版本資訊可由 `APP_VERSION` / `APP_RELEASE_DATE` / `APP_GIT_SHA` 環境變數於部署時覆蓋。前端打包會自動嵌入版本與日期（設定頁底部顯示）。
 
 ---
 

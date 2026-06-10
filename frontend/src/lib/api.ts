@@ -10,7 +10,7 @@ import type {
 } from "@/types";
 
 const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
 const ACCESS_KEY = "fmj_access";
 const REFRESH_KEY = "fmj_refresh";

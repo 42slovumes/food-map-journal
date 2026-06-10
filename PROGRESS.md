@@ -107,6 +107,14 @@ food-map-journal/
 - token 存 localStorage、缺 CSP：MVP 可接受取捨，httpOnly cookie / CSP 列後續強化。
 - client_id 前後端一致性：屬設定 DX（README 已載明需同一組）。錯誤訊息列舉、email full_clean：近乎零風險。
 
+## API 版本化、healthz 與前端版本標記（本輪）
+
+- **Google 登入複查**：9 個 pytest 全過、前後端元件齊全，確認完整可用。
+- **API 改 `/api/v1/`**：`config/urls.py` 全部路由前綴改 v1；同步更新前端 `VITE_API_BASE_URL` 預設、`.env(.example)`、docker-compose、README、測試絕對路徑。前端無其他 `/api` 硬編碼（皆走 baseURL）。實機驗證：前端登入後所有呼叫走 `/api/v1/`、舊 `/api/...` 回 404。
+- **healthz**：新增 `GET /healthz/`（與 `/api/v1/healthz/`）回傳 `status/service/version/released/commit/environment/time`，供 k8s/VM 探針與版更除錯；`/api/v1/health/` 為輕量 ok。版本資訊在 `backend/config/version.py`，可由 `APP_VERSION`/`APP_RELEASE_DATE`/`APP_GIT_SHA` 覆蓋（compose 已 passthrough）。
+- **前端打包嵌日期**：vite `define` 注入 `__APP_VERSION__`（package.json）與 `__BUILD_DATE__`（打包當日 YYYY-MM-DD），設定頁底顯示「v0.2.0 · build 2026-06-10」。版本升至 0.2.0。
+- **附帶修正**：`seed_demo` 改為冪等（已有 demo 資料就略過，`--force` 可重建），避免每次重啟後端清掉使用者資料。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。

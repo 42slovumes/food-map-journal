@@ -13,7 +13,7 @@ from django.test import override_settings
 from rest_framework.test import APIClient
 
 User = get_user_model()
-URL = "/api/auth/google/"
+URL = "/api/v1/auth/google/"
 GOOGLE = "accounts.views.google_id_token.verify_oauth2_token"
 
 
@@ -87,15 +87,15 @@ def test_missing_sub_rejected(mock_verify, client):
 def test_logout_blacklists_refresh_token(client):
     User.objects.create_user(username="lo", email="lo@example.com", password="pw-123456")
     login = client.post(
-        "/api/auth/login/", {"email": "lo@example.com", "password": "pw-123456"}, format="json"
+        "/api/v1/auth/login/", {"email": "lo@example.com", "password": "pw-123456"}, format="json"
     )
     refresh = login.json()["refresh"]
 
-    out = client.post("/api/auth/logout/", {"refresh": refresh}, format="json")
+    out = client.post("/api/v1/auth/logout/", {"refresh": refresh}, format="json")
     assert out.status_code == 205
 
     # 已撤銷的 refresh token 不能再換新 access token
-    again = client.post("/api/auth/refresh/", {"refresh": refresh}, format="json")
+    again = client.post("/api/v1/auth/refresh/", {"refresh": refresh}, format="json")
     assert again.status_code == 401
 
 

@@ -61,6 +61,13 @@ CATEGORIES = [
 class Command(BaseCommand):
     help = "建立示範資料（demo 帳號與台北範例地點）"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="即使 demo 已有資料也強制重建（會清掉現有 demo 地圖）",
+        )
+
     @transaction.atomic
     def handle(self, *args, **options):
         user, created = User.objects.get_or_create(
@@ -71,6 +78,11 @@ class Command(BaseCommand):
         user.save()
         if created:
             self.stdout.write(self.style.SUCCESS(f"建立 demo 使用者：{DEMO_EMAIL}"))
+
+        # 冪等：demo 已有地圖就略過（避免每次重啟覆蓋使用者資料）；--force 可強制重建
+        if Map.objects.filter(owner=user).exists() and not options["force"]:
+            self.stdout.write("demo 已有資料，略過種子（要重建請加 --force）")
+            return
 
         # 清掉舊的 demo 地圖（連帶分類、地點），重建
         Map.objects.filter(owner=user).delete()

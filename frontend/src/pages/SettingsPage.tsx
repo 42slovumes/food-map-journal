@@ -118,7 +118,9 @@ export default function SettingsPage() {
           登出
         </button>
 
-        <p className="pb-2 text-center text-xs text-ink-faint">Pinmap · 你的地圖收藏 · v0.1</p>
+        <p className="pb-2 text-center text-xs text-ink-faint">
+          Pinmap · 你的地圖收藏 · v{__APP_VERSION__} · build {__BUILD_DATE__}
+        </p>
       </div>
     </div>
   );
