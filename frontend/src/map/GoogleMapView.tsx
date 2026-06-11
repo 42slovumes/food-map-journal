@@ -1,12 +1,8 @@
-import { Loader } from "@googlemaps/js-api-loader";
 import { useEffect, useRef } from "react";
 
-import {
-  DEFAULT_CENTER,
-  DEFAULT_ZOOM,
-  GOOGLE_MAPS_API_KEY,
-  type MapViewProps,
-} from "./types";
+import { loadGoogleMaps } from "@/lib/googleLoader";
+
+import { DEFAULT_CENTER, DEFAULT_ZOOM, type MapViewProps } from "./types";
 
 // 簡約地圖樣式：降低道路飽和、隱藏 POI 標籤雜訊，讓自家 marker 突出
 const MAP_STYLE: google.maps.MapTypeStyle[] = [
@@ -29,17 +25,6 @@ function pinSvg(color: string, active: boolean): google.maps.Icon {
     scaledSize: new google.maps.Size(active ? 44 : 38, active ? 44 : 38),
     anchor: new google.maps.Point(active ? 22 : 19, active ? 44 : 38),
   };
-}
-
-let loaderPromise: Promise<typeof google> | null = null;
-function loadGoogle() {
-  if (!loaderPromise) {
-    loaderPromise = new Loader({
-      apiKey: GOOGLE_MAPS_API_KEY,
-      version: "weekly",
-    }).load();
-  }
-  return loaderPromise;
 }
 
 export default function GoogleMapView({
@@ -65,7 +50,7 @@ export default function GoogleMapView({
   // 初始化地圖
   useEffect(() => {
     let cancelled = false;
-    loadGoogle().then(() => {
+    loadGoogleMaps().then(() => {
       if (cancelled || !elRef.current || mapRef.current) return;
       const map = new google.maps.Map(elRef.current, {
         center: center ?? DEFAULT_CENTER,

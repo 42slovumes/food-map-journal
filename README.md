@@ -12,7 +12,7 @@
 - **自由分類**：自訂名稱、顏色、圖示、描述，排序與計數。
 - **地圖 / 看板**：可建立多張主題地圖並快速切換。
 - **地點紀錄**：名稱、地址、座標、狀態、星等、標籤、備註，照片與進階欄位。
-- **地點搜尋帶入座標**：輸入店名/地址自動帶入地址與經緯度（OpenStreetMap，免金鑰）。
+- **地點搜尋帶入座標（雙模式）**：輸入店名/地址即帶入名稱、地址與經緯度。有 Google 金鑰用 **Google Places**（含 place_id 與評分，導航更精準）；無金鑰自動退回 **OpenStreetMap Nominatim**（免金鑰）。
 - **地圖標註 + 清單**：地圖 marker 與清單卡片連動；桌機分割視圖、手機地圖/清單切換 + bottom sheet 詳情。
 - **單一分類切換**：chips 一鍵只看某個分類。
 - **附近搜尋**：依目前位置，列出附近已收藏的地點並按距離排序。
@@ -101,7 +101,7 @@ pnpm dev
 
 | 變數 | 說明 |
 |------|------|
-| `VITE_GOOGLE_MAPS_API_KEY` | 留空 → 自動用 OpenStreetMap；填入 → 切換成 Google Maps + Places |
+| `VITE_GOOGLE_MAPS_API_KEY` | 留空 → 地圖用 OpenStreetMap、搜尋用 Nominatim；填入 → 地圖用 Google Maps、地點搜尋用 **Google Places**（拿名稱/地址/座標/place_id/評分）。Google Places 搜尋需在該金鑰啟用 **Places API (New)** |
 | `GOOGLE_OAUTH_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Google 登入用的同一組 Web Client ID（前後端皆需）；留空則不啟用 Google 登入 |
 | `VITE_API_BASE_URL` | 前端呼叫的後端位置（預設 `http://localhost:8080/api/v1`） |
 | `POSTGRES_*` | 資料庫帳密；本機不設 `POSTGRES_HOST` 即用 SpatiaLite（檔案型空間 DB） |

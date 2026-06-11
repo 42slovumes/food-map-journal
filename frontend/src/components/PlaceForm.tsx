@@ -1,4 +1,4 @@
-import { MapPinned, Search, X } from "lucide-react";
+import { MapPinned, Search, Star, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Dialog } from "@/components/ui/Dialog";
@@ -76,6 +76,7 @@ export function PlaceForm({ open, onClose, initial, defaultCoords, defaultCatego
 
   // 地點搜尋 debounce
   const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
   useEffect(() => {
     if (geoQuery.trim().length < 2) {
       setGeoResults([]);
@@ -85,15 +86,17 @@ export function PlaceForm({ open, onClose, initial, defaultCoords, defaultCatego
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
+      const id = ++reqIdRef.current; // 防止較舊的結果覆蓋（Google 搜尋無法 abort）
       setGeoLoading(true);
       try {
         const results = await searchPlaces(geoQuery, ctrl.signal);
+        if (id !== reqIdRef.current) return; // 已有更新的查詢，丟棄
         setGeoResults(results);
         setShowResults(true);
       } catch {
         /* 忽略中斷/失敗 */
       } finally {
-        setGeoLoading(false);
+        if (id === reqIdRef.current) setGeoLoading(false);
       }
     }, 450);
     return () => clearTimeout(t);
@@ -103,6 +106,7 @@ export function PlaceForm({ open, onClose, initial, defaultCoords, defaultCatego
     if (!name.trim()) setName(r.name);
     setAddress(r.address);
     setCoords({ lat: r.lat, lng: r.lng });
+    if (r.placeId) setPlaceId(r.placeId); // Google 來源：帶入 place_id，導航更精準
     setShowResults(false);
     setGeoQuery("");
   }
@@ -194,10 +198,23 @@ export function PlaceForm({ open, onClose, initial, defaultCoords, defaultCatego
                   className="flex w-full items-start gap-2 border-b border-line/60 px-3.5 py-2.5 text-left last:border-0 hover:bg-brand-50"
                 >
                   <MapPinned size={16} className="mt-0.5 shrink-0 text-brand-500" />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-ink">{r.name}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-ink">{r.name}</span>
+                      {r.rating != null && (
+                        <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-amber-600">
+                          <Star size={11} className="fill-amber-400 text-amber-400" />
+                          {r.rating}
+                        </span>
+                      )}
+                    </div>
                     <div className="truncate text-xs text-ink-faint">{r.address}</div>
                   </div>
+                  {r.source === "google" && (
+                    <span className="mt-0.5 shrink-0 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] text-ink-faint">
+                      Google
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

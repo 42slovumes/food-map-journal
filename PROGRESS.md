@@ -231,6 +231,14 @@ food-map-journal/
 
 **驗證**：後端 **33 測試全過**（含新 N+1 回歸）；前端建置零錯誤；全面 e2e 回歸全通；受影響端點（maps 計數/角色、/me、共編、public）live 確認正確。
 
+## Google Places 雙模式地點搜尋（本輪）
+
+- 共用載入器 `lib/googleLoader.ts`（GoogleMapView 與搜尋共用同一 Loader）。
+- `lib/geocode.ts` 統一 `searchPlaces`：有 `VITE_GOOGLE_MAPS_API_KEY` 用 **Google Places `Place.searchByText`**（回傳 name/address/座標/place_id/rating/googleMapsURI）；失敗或無金鑰自動退回 **Nominatim**。
+- PlaceForm：搜尋結果下拉顯示 Google 評分與來源徽章；選取時帶入 `google_place_id`（後端據此產生精準的 Google Maps 導航連結）；加「最新請求守衛」避免 Google 搜尋（無法 abort）的舊結果覆蓋。
+- 需求：Google 路徑需在金鑰啟用 **Places API (New)**（有計費）；README 已載明。
+- 驗證：前端建置零錯誤；docker 上（無金鑰）e2e 確認 Nominatim 退回的搜尋下拉正常；Google 路徑依文件 API 實作 + 優雅降級（需金鑰實測）。
+
 ## 目前執行狀態
 
 - Docker 全堆疊目前為「已啟動」狀態（`docker compose up -d`）：前端 http://localhost:5173、後端 http://localhost:8080/api。
